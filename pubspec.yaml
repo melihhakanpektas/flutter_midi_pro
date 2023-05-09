@@ -1,0 +1,28 @@
+name: flutter_midi_pro
+description: A new Flutter plugin project.
+version: 1.0.0
+homepage: null
+
+environment:
+  sdk: ">=2.19.6 <3.0.0"
+  flutter: ">=2.5.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  path_provider: ^2.0.14
+  plugin_platform_interface: ^2.0.2
+
+dev_dependencies:
+  flutter_lints: ^2.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.melihhakanpektas.flutter_midi_pro
+        pluginClass: FlutterMidiProPlugin
+      ios:
+        pluginClass: FlutterMidiProPlugin
