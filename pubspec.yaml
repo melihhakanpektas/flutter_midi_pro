@@ -26,3 +26,7 @@ flutter:
         pluginClass: FlutterMidiProPlugin
       ios:
         pluginClass: FlutterMidiProPlugin
+        sharedDarwinSource: true
+      macos:
+        pluginClass: FlutterMidiProPlugin
+        sharedDarwinSource: true

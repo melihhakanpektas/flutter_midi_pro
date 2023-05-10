@@ -1,55 +1,62 @@
 import Flutter
-import UIKit
+import CoreMIDI
+import AVFAudio
 import AVFoundation
+import CoreAudio
 
 public class SwiftFlutterMidiProPlugin: NSObject, FlutterPlugin {
   var message = "Please Send Message"
   var _arguments = [String: Any]()
-  var au: AudioUnitMIDISynth!
+  var audioEngine = AVAudioEngine()
+  var samplerNode = AVAudioUnitSampler()
 
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
-    let instance = SwiftFlutterMidiProPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-  }
+    public static func register(with registrar: FlutterPluginRegistrar) {
+        let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
+        let instance = SwiftFlutterMidiProPlugin()
+        registrar.addMethodCallDelegate(instance, channel: channel)
+      }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
       case "prepare_midi":
         let map = call.arguments as? Dictionary<String, String>
-       let data = map?["path"]
-      let url = URL(fileURLWithPath: data!)
-         au = AudioUnitMIDISynth(soundfont: url)
+        let data = map?["path"]
+        let url = URL(fileURLWithPath: data!)
+        do {
+          audioEngine.attach(samplerNode)
+          audioEngine.connect(samplerNode, to: audioEngine.mainMixerNode, format: nil)
+            try audioEngine.start()
+          try samplerNode.loadSoundBankInstrument(at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
           print("Valid URL: \(url)")
+        } catch {
+          print("Error preparing MIDI: \(error.localizedDescription)")
+        }
         let message = "Prepared Sound Font"
         result(message)
-    case "change_sound":
+      case "change_sound":
         let map = call.arguments as? Dictionary<String, String>
         let data = map?["path"]
         let url = URL(fileURLWithPath: data!)
-        au.prepare(soundfont: url)
-        print("Valid URL: \(url)")
-        let message = "Prepared Sound Font"
-        result(message)
-      case "unmute":
         do {
-            try AVAudioSession.sharedInstance().setCategory(AVAudioSession.Category.playback)
+          try samplerNode.loadSoundBankInstrument(at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+          print("Valid URL: \(url)")
         } catch {
-            print(error)
+          print("Error changing sound: \(error.localizedDescription)")
         }
-        let message = "unmuted Device"
+        let message = "Prepared Sound Font"
         result(message)
       case "play_midi_note":
         _arguments = call.arguments as! [String : Any];
-        let midi = _arguments["note"] as? Int
-        au.playPitch(midi:  midi ?? 60)
-        let message = "Playing: \(String(describing: midi!))"
+        let note = UInt8(_arguments["note"] as! Int)
+        let velocity = UInt8(_arguments["velocity"] as! Int)
+        samplerNode.startNote(note, withVelocity: velocity, onChannel: 0)
+        let message = "Playing: \(String(describing: note))"
         result(message)
       case "stop_midi_note":
-      _arguments = call.arguments as! [String : Any];
-       let midi = _arguments["note"] as? Int
-      au.stopPitch(midi:  midi ?? 60)
-        let message = "Stopped: \(String(describing: midi!))"
+        _arguments = call.arguments as! [String : Any];
+        let note = UInt8(_arguments["note"] as! Int)
+        samplerNode.stopNote(note, onChannel: 0)
+        let message = "Stopped: \(String(describing: note))"
         result(message)
       default:
         result(FlutterMethodNotImplemented)
