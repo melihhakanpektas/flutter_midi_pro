@@ -17,40 +17,62 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final _flutterMidi = FlutterMidiPro();
-  @override
-  void initState() {
-    load(_value);
-    super.initState();
-  }
+  bool isPlayingMelody = false;
 
-  void load(String asset) async {
+  Future<void> load(String asset) async {
     debugPrint('Loading File...');
-    try {
-      ByteData byte = await rootBundle.load(asset);
-      _flutterMidi.loadSoundfont(
-          sf2Data: byte, name: _value.replaceAll('assets/', ''));
-    } on Exception catch (e) {
-      print(e);
-    }
+    ByteData byte = await rootBundle.load(asset);
+    _flutterMidi.loadSoundfont(
+        sf2Data: byte, name: _value.replaceAll('assets/', ''));
   }
 
   final String _value = 'assets/tight_piano.sf2';
   Map<int, NoteModel> pointerAndNote = {};
 
   void play(int midi, {int velocity = 127}) {
-    try {
-      _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
-    } on Exception catch (e) {
-      print(e);
-    }
+    _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
   }
 
   void stop(int midi) {
-    try {
-      _flutterMidi.stopMidiNote(midi: midi);
-    } on Exception catch (e) {
-      print(e);
+    _flutterMidi.stopMidiNote(midi: midi);
+  }
+
+  Future<void> _playHalfNote(int note) async {
+    play(note);
+    await Future.delayed(const Duration(milliseconds: 167));
+    stop(note);
+  }
+
+  Future<void> _playWholeNote(int note) async {
+    play(note);
+    await Future.delayed(const Duration(milliseconds: 333));
+    stop(note);
+  }
+
+  Future<void> _playMelody() async {
+    if (!isPlayingMelody) {
+      isPlayingMelody = true;
+      await _playHalfNote(88);
+      await _playHalfNote(86);
+      await _playWholeNote(78);
+      await _playWholeNote(80);
+      await _playHalfNote(85);
+      await _playHalfNote(83);
+      await _playWholeNote(74);
+      await _playWholeNote(76);
+      await _playHalfNote(83);
+      await _playHalfNote(81);
+      await _playWholeNote(73);
+      await _playWholeNote(76);
+      await _playWholeNote(81);
+      isPlayingMelody = false;
     }
+  }
+
+  @override
+  void initState() {
+    load(_value).then((value) => _playMelody());
+    super.initState();
   }
 
   @override
@@ -67,6 +89,9 @@ class _MyAppState extends State<MyApp> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            ElevatedButton(
+                onPressed: () => _playMelody(),
+                child: const Text('Play Melody')),
             PianoPro(
               noteCount: 15,
               onTapDown: (NoteModel? note, int tapId) {
