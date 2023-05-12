@@ -1,7 +1,6 @@
 name: flutter_midi_pro
 description: A new Flutter plugin project.
 version: 1.0.0
-homepage: null
 
 environment:
   sdk: ">=2.19.6 <3.0.0"
