@@ -24,33 +24,15 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
-  Future<String?> prepare({
+  Future<String?> loadSoundfont({
     required ByteData? sf2Data,
     String name = 'instrument.sf2',
   }) async {
     if (sf2Data == null) return Future.value(null);
-    if (kIsWeb) return methodChannel.invokeMethod('prepare_midi');
+    if (kIsWeb) return methodChannel.invokeMethod('load_soundfont');
     File? file = await writeToFile(sf2Data, name: name);
     if (file == null) return null;
-    return methodChannel.invokeMethod('prepare_midi', {'path': file.path});
-  }
-
-  @override
-  Future<String?> changeSound({
-    required ByteData? sf2Data,
-    String name = 'instrument.sf2',
-  }) async {
-    if (sf2Data == null) return Future.value(null);
-    File? file = await writeToFile(sf2Data, name: name);
-    if (file == null) return null;
-
-    final Map<dynamic, dynamic> mapData = <dynamic, dynamic>{};
-    mapData['path'] = file.path;
-    debugPrint('Path => ${file.path}');
-    final String result =
-        await methodChannel.invokeMethod('change_sound', mapData);
-    debugPrint('Result: $result');
-    return result;
+    return methodChannel.invokeMethod('load_soundfont', {'path': file.path});
   }
 
   @override

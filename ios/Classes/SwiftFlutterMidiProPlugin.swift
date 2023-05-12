@@ -18,7 +18,7 @@ public class SwiftFlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
-      case "prepare_midi":
+      case "load_soundfont":
         let map = call.arguments as? Dictionary<String, String>
         let data = map?["path"]
         let url = URL(fileURLWithPath: data!)
@@ -30,18 +30,6 @@ public class SwiftFlutterMidiProPlugin: NSObject, FlutterPlugin {
           print("Valid URL: \(url)")
         } catch {
           print("Error preparing MIDI: \(error.localizedDescription)")
-        }
-        let message = "Prepared Sound Font"
-        result(message)
-      case "change_sound":
-        let map = call.arguments as? Dictionary<String, String>
-        let data = map?["path"]
-        let url = URL(fileURLWithPath: data!)
-        do {
-          try samplerNode.loadSoundBankInstrument(at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
-          print("Valid URL: \(url)")
-        } catch {
-          print("Error changing sound: \(error.localizedDescription)")
         }
         let message = "Prepared Sound Font"
         result(message)

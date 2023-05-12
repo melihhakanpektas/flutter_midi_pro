@@ -11,17 +11,12 @@ class FlutterMidiPro {
           {String name = 'instrument.sf2'}) async =>
       FlutterMidiProPlatform.instance.writeToFile(data);
 
-  Future<String?> prepare({
+  Future<String?> loadSoundfont({
     required ByteData? sf2Data,
     String name = 'instrument.sf2',
   }) async =>
-      FlutterMidiProPlatform.instance.prepare(sf2Data: sf2Data, name: name);
-
-  Future<String?> changeSound({
-    required ByteData? sf2Data,
-    String name = 'instrument.sf2',
-  }) async =>
-      FlutterMidiProPlatform.instance.prepare(sf2Data: sf2Data, name: name);
+      FlutterMidiProPlatform.instance
+          .loadSoundfont(sf2Data: sf2Data, name: name);
 
   Future<String?> stopMidiNote({
     required int midi,

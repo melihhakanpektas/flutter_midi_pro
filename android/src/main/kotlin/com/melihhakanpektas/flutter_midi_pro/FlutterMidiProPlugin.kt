@@ -34,23 +34,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   }
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
-    if (call.method.equals("prepare_midi")) {
-      try {
-        val _path: String = call.argument("path")!!
-        val _file = File(_path)
-        val sf = SF2Soundbank(_file)
-        synth = SoftSynthesizer()
-        synth.open()
-        synth.loadAllInstruments(sf)
-        synth.channels[0].programChange(0)
-        synth.channels[1].programChange(1)
-        recv = synth.receiver
-      } catch (e: IOException) {
-        e.printStackTrace()
-      } catch (e: MidiUnavailableException) {
-        e.printStackTrace()
-      }
-    } else if (call.method.equals("change_sound")) {
+    if (call.method.equals("load_soundfont")) {
       try {
         val _path: String = call.argument("path")!!
         val _file = File(_path)

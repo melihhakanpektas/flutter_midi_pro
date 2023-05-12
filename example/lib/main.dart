@@ -25,19 +25,32 @@ class _MyAppState extends State<MyApp> {
 
   void load(String asset) async {
     debugPrint('Loading File...');
-    ByteData byte = await rootBundle.load(asset);
-    _flutterMidi.prepare(sf2Data: byte, name: _value.replaceAll('assets/', ''));
+    try {
+      ByteData byte = await rootBundle.load(asset);
+      _flutterMidi.loadSoundfont(
+          sf2Data: byte, name: _value.replaceAll('assets/', ''));
+    } on Exception catch (e) {
+      print(e);
+    }
   }
 
   final String _value = 'assets/tight_piano.sf2';
   Map<int, NoteModel> pointerAndNote = {};
 
-  void play(int midi, {int velocity = 64}) {
-    _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
+  void play(int midi, {int velocity = 127}) {
+    try {
+      _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
+    } on Exception catch (e) {
+      print(e);
+    }
   }
 
   void stop(int midi) {
-    _flutterMidi.stopMidiNote(midi: midi);
+    try {
+      _flutterMidi.stopMidiNote(midi: midi);
+    } on Exception catch (e) {
+      print(e);
+    }
   }
 
   @override
@@ -46,7 +59,7 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
-          title: const Text('Plugin example app'),
+          title: const Text('Flutter Midi Pro Example'),
         ),
         body: Center(
             child: Column(

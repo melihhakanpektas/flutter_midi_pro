@@ -33,7 +33,7 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('Write to file has not been implemented.');
   }
 
-  Future<String?> prepare({
+  Future<String?> loadSoundfont({
     required ByteData? sf2Data,
     String name = 'instrument.sf2',
   }) async {
