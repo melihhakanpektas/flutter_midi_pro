@@ -11,7 +11,7 @@ public class SwiftFlutterMidiProPlugin: NSObject, FlutterPlugin {
   var samplerNode = AVAudioUnitSampler()
 
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
+      let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger)
         let instance = SwiftFlutterMidiProPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
       }
