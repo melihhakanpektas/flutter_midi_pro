@@ -18,15 +18,14 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   final _midi = MidiPro();
   bool isPlayingMelody = false;
+  final String _value = 'assets/tight_piano.sf2';
 
   Future<void> load(String asset) async {
-    debugPrint('Loading File...');
-    final byte = await rootBundle.load(asset);
-    await _midi.loadSoundfont(
-        sf2Data: byte, name: _value.replaceAll('assets/', ''));
+    debugPrint('Sf2 file loading: $asset');
+    await _midi.loadSoundfont(sf2Path: _value);
+    debugPrint('Sf2 file loaded: $asset');
   }
 
-  final String _value = 'assets/tight_piano.sf2';
   Map<int, NoteModel> pointerAndNote = {};
 
   void play(int midi, {int velocity = 127}) {

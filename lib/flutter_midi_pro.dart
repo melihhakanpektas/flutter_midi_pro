@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 
 /// The FlutterMidiPro class provides functions for writing to and loading soundfont
@@ -31,11 +31,13 @@ class MidiPro {
   /// the soundfont file. It has a default value of 'instrument.sf2'. Defaults to
   /// instrument.sf2
   Future<String?> loadSoundfont({
-    required ByteData? sf2Data,
+    required String sf2Path,
     String name = 'instrument.sf2',
-  }) async =>
-      FlutterMidiProPlatform.instance
-          .loadSoundfont(sf2Data: sf2Data, name: name);
+  }) async {
+    final sf2Data = await rootBundle.load(sf2Path);
+    return FlutterMidiProPlatform.instance
+        .loadSoundfont(sf2Data: sf2Data, name: name);
+  }
 
   /// This function stops a MIDI note with a given MIDI number and velocity.
   ///
