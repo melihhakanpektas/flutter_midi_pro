@@ -5,7 +5,7 @@ import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 
 /// The FlutterMidiPro class provides functions for writing to and loading soundfont
 /// files, as well as playing and stopping MIDI notes.
-class FlutterMidiPro {
+class MidiPro {
   /// This function writes a ByteData to a .sf2 file using the FlutterMidiProPlatform
   /// instance.
   ///

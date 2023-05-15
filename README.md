@@ -16,10 +16,16 @@ dependencies:
 
 ## Usage
 
-Import `flutter_midi_pro.dart` and use the `FlutterMidiPro` class to access the plugin's functions.
+Import `flutter_midi_pro.dart` and use the `MidiPro` class to access the plugin's functions.
 
 ```dart
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
+```
+
+### Create a MidiPro Variable
+
+```dart
+final _midiPro = MidiPro();
 ```
 
 ### Load SoundFont File
@@ -30,7 +36,7 @@ Use the `loadSoundfont` function to load a SoundFont file with optional `ByteDat
 final String _path = 'assets/tight_piano.sf2';
 Future loadSoundfont(String asset) async {
     ByteData byte = await rootBundle.load(asset);
-    _flutterMidi.loadSoundfont(
+    _midiPro.loadSoundfont(
     sf2Data: byte, name: _path.replaceAll('assets/', ''));
     }
 ```
@@ -41,7 +47,7 @@ Use the `playMidiNote` function to play a MIDI note with a given MIDI value and 
 
 ```dart
 play(int midi, {int velocity = 127}) {
-    _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
+    _midiPro.playMidiNote(midi: midi, velocity: velocity);
   }
 ```
 
@@ -51,7 +57,7 @@ Use the `stopMidiNote` function to stop a MIDI note with a given MIDI number and
 
 ```dart
 void stop(int midi) {
-    _flutterMidi.stopMidiNote(midi: midi);
+    _midiPro.stopMidiNote(midi: midi);
   }
 ```
 
@@ -77,22 +83,22 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final _flutterMidi = FlutterMidiPro();
+  final _midiPro = MidiPro();
   final String _value = 'assets/tight_piano.sf2';
   Map<int, NoteModel> pointerAndNote = {};
 
   Future<void> load(String asset) async {
     ByteData byte = await rootBundle.load(asset);
-    _flutterMidi.loadSoundfont(
+    _midiPro.loadSoundfont(
         sf2Data: byte, name: _value.replaceAll('assets/', ''));
   }
 
   void play(int midi, {int velocity = 127}) {
-    _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
+    _midiPro.playMidiNote(midi: midi, velocity: velocity);
   }
 
   void stop(int midi) {
-    _flutterMidi.stopMidiNote(midi: midi);
+    _midiPro.stopMidiNote(midi: midi);
   }
 
   @override

@@ -16,13 +16,13 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  final _flutterMidi = FlutterMidiPro();
+  final _midi = MidiPro();
   bool isPlayingMelody = false;
 
   Future<void> load(String asset) async {
     debugPrint('Loading File...');
-    ByteData byte = await rootBundle.load(asset);
-    await _flutterMidi.loadSoundfont(
+    final byte = await rootBundle.load(asset);
+    await _midi.loadSoundfont(
         sf2Data: byte, name: _value.replaceAll('assets/', ''));
   }
 
@@ -30,11 +30,11 @@ class _MyAppState extends State<MyApp> {
   Map<int, NoteModel> pointerAndNote = {};
 
   void play(int midi, {int velocity = 127}) {
-    _flutterMidi.playMidiNote(midi: midi, velocity: velocity);
+    _midi.playMidiNote(midi: midi, velocity: velocity);
   }
 
   void stop(int midi) {
-    _flutterMidi.stopMidiNote(midi: midi);
+    _midi.stopMidiNote(midi: midi);
   }
 
   Future<void> _playHalfNote(int note) async {

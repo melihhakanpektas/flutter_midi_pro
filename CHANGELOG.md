@@ -9,3 +9,7 @@
 ## 1.0.3
 
 - Minor fix.
+
+## 1.0.4
+
+- Class name FlutterMidiPro to MidiPro
