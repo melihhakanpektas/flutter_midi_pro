@@ -24,51 +24,56 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   private lateinit var synth: SoftSynthesizer
   private lateinit var recv: Receiver
 
-  override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+  override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
   }
 
-  override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
   }
 
-  override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: MethodChannel.Result) {
+  override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     if (call.method.equals("load_soundfont")) {
       try {
-        val _path: String = call.argument("path")!!
-        val _file = File(_path)
-        val sf = SF2Soundbank(_file)
+        val path: String = call.argument("path")!!
+        val file = File(path)
+        val sf = SF2Soundbank(file)
         synth = SoftSynthesizer()
         synth.open()
         synth.loadAllInstruments(sf)
-        synth.channels[0].programChange(0)
-        synth.channels[1].programChange(1)
-        recv = synth.receiver
+        recv = synth.receiver!!
+        result.success("Soundfont loaded successfully")
       } catch (e: IOException) {
         e.printStackTrace()
+        result.error("LOAD_ERROR", "Failed to load soundfont", null)
       } catch (e: MidiUnavailableException) {
         e.printStackTrace()
+        result.error("LOAD_ERROR", "Failed to load soundfont", null)
       }
     } else if (call.method.equals("play_midi_note")) {
-      val _note: Int = call.argument("note")!!
-      val _velocity: Int = call.argument("velocity")!!
+      val note: Int = call.argument("note")!!
+      val velocity: Int = call.argument("velocity")!!
       try {
         val msg = ShortMessage()
-        msg.setMessage(ShortMessage.NOTE_ON, 0, _note, _velocity)
+        msg.setMessage(ShortMessage.NOTE_ON, 0, note, velocity)
         recv.send(msg, -1)
+        result.success("MIDI note played successfully")
       } catch (e: InvalidMidiDataException) {
         e.printStackTrace()
+        result.error("PLAY_ERROR", "Failed to play MIDI note", null)
       }
     } else if (call.method.equals("stop_midi_note")) {
-      val _note: Int = call.argument("note")!!
-      val _velocity: Int = call.argument("velocity")!!
+      val note: Int = call.argument("note")!!
+      val velocity: Int = call.argument("velocity")!!
       try {
         val msg = ShortMessage()
-        msg.setMessage(ShortMessage.NOTE_OFF, 0, _note, _velocity)
+        msg.setMessage(ShortMessage.NOTE_OFF, 0, note, velocity)
         recv.send(msg, -1)
+        result.success("MIDI note stopped successfully")
       } catch (e: InvalidMidiDataException) {
         e.printStackTrace()
+        result.error("STOP_ERROR", "Failed to stop MIDI note", null)
       }
     }
   }

@@ -22,7 +22,7 @@ class _MyAppState extends State<MyApp> {
   Future<void> load(String asset) async {
     debugPrint('Loading File...');
     ByteData byte = await rootBundle.load(asset);
-    _flutterMidi.loadSoundfont(
+    await _flutterMidi.loadSoundfont(
         sf2Data: byte, name: _value.replaceAll('assets/', ''));
   }
 

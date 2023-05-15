@@ -150,7 +150,7 @@ Contributions are welcome! Please feel free to submit a PR or open an issue.
 
 If you have any questions or suggestions, feel free to contact the package maintainer, [Melih Hakan Pektas](https://github.com/MelihHakanPektas), via email or through GitHub.
 
-![Melih Hakan Pektas](https://avatars.githubusercontent.com/u/108405689?v=4)
+![Melih Hakan Pektas](https://avatars.githubusercontent.com/u/108405689?s=100&v=4)
 
 Thank you for contributing to flutter_piano_pro!
 

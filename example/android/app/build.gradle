@@ -60,6 +60,7 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+    namespace 'com.melihhakanpektas.flutter_midi_pro_example'
 }
 
 flutter {

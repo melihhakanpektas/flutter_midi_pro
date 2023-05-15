@@ -5,3 +5,7 @@
 ## 1.0.1
 
 - Readme added.
+
+## 1.0.3
+
+- Minor fix.
