@@ -92,7 +92,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "1.0.4"
+    version: "1.0.5"
   flutter_piano_pro:
     dependency: "direct main"
     description:

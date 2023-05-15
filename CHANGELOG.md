@@ -13,3 +13,7 @@
 ## 1.0.4
 
 - Class name FlutterMidiPro to MidiPro
+
+## 1.0.5
+
+- sf2Data field to sf2Path
