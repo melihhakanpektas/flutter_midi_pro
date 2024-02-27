@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:flutter_piano_pro/flutter_piano_pro.dart';
 import 'package:flutter_piano_pro/note_model.dart';
@@ -36,41 +35,9 @@ class _MyAppState extends State<MyApp> {
     _midi.stopMidiNote(midi: midi);
   }
 
-  Future<void> _playHalfNote(int note) async {
-    play(note);
-    await Future.delayed(const Duration(milliseconds: 167));
-    stop(note);
-  }
-
-  Future<void> _playWholeNote(int note) async {
-    play(note);
-    await Future.delayed(const Duration(milliseconds: 333));
-    stop(note);
-  }
-
-  Future<void> _playMelody() async {
-    if (!isPlayingMelody) {
-      isPlayingMelody = true;
-      await _playHalfNote(88);
-      await _playHalfNote(86);
-      await _playWholeNote(78);
-      await _playWholeNote(80);
-      await _playHalfNote(85);
-      await _playHalfNote(83);
-      await _playWholeNote(74);
-      await _playWholeNote(76);
-      await _playHalfNote(83);
-      await _playHalfNote(81);
-      await _playWholeNote(73);
-      await _playWholeNote(76);
-      await _playWholeNote(81);
-      isPlayingMelody = false;
-    }
-  }
-
   @override
   void initState() {
-    load(_value).then((value) => _playMelody());
+    load(_value);
     super.initState();
   }
 
@@ -88,9 +55,6 @@ class _MyAppState extends State<MyApp> {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            ElevatedButton(
-                onPressed: () => _playMelody(),
-                child: const Text('Play Melody')),
             PianoPro(
               noteCount: 15,
               onTapDown: (NoteModel? note, int tapId) {

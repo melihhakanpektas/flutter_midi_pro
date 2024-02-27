@@ -33,7 +33,7 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('Write to file has not been implemented.');
   }
 
-  Future<String?> loadSoundfont({
+  Future<Object?> loadSoundfont({
     required ByteData? sf2Data,
     String name = 'instrument.sf2',
   }) async {
@@ -47,13 +47,11 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('changeSound() not been implemented.');
   }
 
-  Future<String?> stopMidiNote(
-      {required int midi, required int velocity}) async {
+  Future<Object?> stopMidiNote({required int midi, required int velocity}) async {
     throw UnimplementedError('stopMidiNote() has not been implemented.');
   }
 
-  Future<String?> playMidiNote(
-      {required int midi, required int velocity}) async {
+  Future<Object?> playMidiNote({required int midi, required int velocity}) async {
     throw UnimplementedError('playMidiNote()  has not been implemented.');
   }
 }

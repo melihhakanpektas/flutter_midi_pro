@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 
@@ -16,8 +14,7 @@ class MidiPro {
   ///   name (String): The name parameter is a string that specifies the name of the
   /// file to be written. By default, it is set to 'instrument.sf2'. Defaults to
   /// instrument.sf2
-  Future<File?> writeToFile(ByteData data,
-          {String name = 'instrument.sf2'}) async =>
+  Future<Object?> writeToFile(ByteData data, {String name = 'instrument.sf2'}) async =>
       FlutterMidiProPlatform.instance.writeToFile(data);
 
   /// This function loads a soundfont file with optional ByteData and a specified
@@ -30,13 +27,12 @@ class MidiPro {
   ///   name (String): The name parameter is a String that represents the name of
   /// the soundfont file. It has a default value of 'instrument.sf2'. Defaults to
   /// instrument.sf2
-  Future<String?> loadSoundfont({
+  Future<Object?> loadSoundfont({
     required String sf2Path,
     String name = 'instrument.sf2',
   }) async {
     final sf2Data = await rootBundle.load(sf2Path);
-    return FlutterMidiProPlatform.instance
-        .loadSoundfont(sf2Data: sf2Data, name: name);
+    return FlutterMidiProPlatform.instance.loadSoundfont(sf2Data: sf2Data, name: name);
   }
 
   /// This function stops a MIDI note with a given MIDI number and velocity.
@@ -48,12 +44,11 @@ class MidiPro {
   /// Interface) that determines the strength or loudness of a note. It is measured on
   /// a scale of 0 to 127, with 0 being the softest and 127 being the loudest. In the
   /// code above, the default value. Defaults to 127
-  Future<String?> stopMidiNote({
+  Future<Object?> stopMidiNote({
     required int midi,
     int velocity = 127,
   }) async =>
-      FlutterMidiProPlatform.instance
-          .stopMidiNote(midi: midi, velocity: velocity);
+      FlutterMidiProPlatform.instance.stopMidiNote(midi: midi, velocity: velocity);
 
   /// This function plays a MIDI note with a given MIDI value and velocity using the
   /// FlutterMidiProPlatform.
@@ -65,10 +60,9 @@ class MidiPro {
   /// Interface) that determines the volume or intensity of a note being played. It
   /// is measured on a scale of 0 to 127, with 0 being the softest and 127 being the
   /// loudest. In the code snippet provided, the. Defaults to 64
-  Future<String?> playMidiNote({
+  Future<Object?> playMidiNote({
     required int midi,
     int velocity = 64,
   }) async =>
-      FlutterMidiProPlatform.instance
-          .playMidiNote(midi: midi, velocity: velocity);
+      FlutterMidiProPlatform.instance.playMidiNote(midi: midi, velocity: velocity);
 }
