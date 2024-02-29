@@ -4,35 +4,49 @@ import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 /// The FlutterMidiPro class provides functions for writing to and loading soundfont
 /// files, as well as playing and stopping MIDI notes.
 class MidiPro {
-  /// This function writes a ByteData to a .sf2 file using the FlutterMidiProPlatform
-  /// instance.
-  ///
+  /// This function loads a soundfont file from the given path using the
+  /// FlutterMidiProPlatform.
   /// Args:
-  ///   data (ByteData): The data parameter is a ByteData object that contains the
-  /// binary data to be written to a file. It could be any type of data, but in this
-  /// case, it is likely MIDI data for a soundfont file.
-  ///   name (String): The name parameter is a string that specifies the name of the
-  /// file to be written. By default, it is set to 'instrument.sf2'. Defaults to
-  /// instrument.sf2
-  Future<Object?> writeToFile(ByteData data, {String name = 'instrument.sf2'}) async =>
-      FlutterMidiProPlatform.instance.writeToFile(data);
+  ///  sf2Path (String): The path to the soundfont file to be loaded.
+  Future<Object?> loadSoundfont({required String sf2Path}) async {
+    try {
+      final sf2Data = await rootBundle.load(sf2Path).then((value) => value.buffer.asUint8List());
+      return FlutterMidiProPlatform.instance.loadSoundfont(sf2Data: sf2Data);
+    } catch (e) {
+      throw 'error loading soundfont: $e';
+    }
+  }
 
-  /// This function loads a soundfont file with optional ByteData and a specified
-  /// name using the FlutterMidiProPlatform instance.
-  ///
+  Future<Object?> isInitialized() async {
+    try {
+      return FlutterMidiProPlatform.instance.isInitialized();
+    } catch (e) {
+      throw 'error checking if initialized: $e';
+    }
+  }
+
+  /// This function changes the soundfont file to the given path using the
+  /// FlutterMidiProPlatform.
   /// Args:
-  ///   sf2Data (ByteData): sf2Data is a required parameter of type ByteData, which
-  /// represents the binary data of a SoundFont file. This parameter is used to load
-  /// the SoundFont into the MIDI engine for playback.
-  ///   name (String): The name parameter is a String that represents the name of
-  /// the soundfont file. It has a default value of 'instrument.sf2'. Defaults to
-  /// instrument.sf2
-  Future<Object?> loadSoundfont({
-    required String sf2Path,
-    String name = 'instrument.sf2',
-  }) async {
-    final sf2Data = await rootBundle.load(sf2Path);
-    return FlutterMidiProPlatform.instance.loadSoundfont(sf2Data: sf2Data, name: name);
+  /// sf2Path (String): The path to the soundfont file to be loaded.
+  Future<Object?> changeSoundfont({required String sf2Path}) async {
+    try {
+      final sf2Data = await rootBundle.load(sf2Path).then((value) => value.buffer.asUint8List());
+      return FlutterMidiProPlatform.instance.changeSoundfont(sf2Data: sf2Data);
+    } catch (e) {
+      throw 'error changing soundfont: $e';
+    }
+  }
+
+  /// This function gets the instruments from the soundfont file using the
+  /// FlutterMidiProPlatform.
+  Future<List<String>> getInstruments() async {
+    try {
+      var instruments = await FlutterMidiProPlatform.instance.getInstruments() as List<Object?>;
+      return instruments.map((e) => e.toString()).toList();
+    } catch (e) {
+      throw 'error getting instruments: $e';
+    }
   }
 
   /// This function stops a MIDI note with a given MIDI number and velocity.
@@ -46,9 +60,16 @@ class MidiPro {
   /// code above, the default value. Defaults to 127
   Future<Object?> stopMidiNote({
     required int midi,
+    int channel = 0,
     int velocity = 127,
-  }) async =>
-      FlutterMidiProPlatform.instance.stopMidiNote(midi: midi, velocity: velocity);
+  }) async {
+    try {
+      return FlutterMidiProPlatform.instance
+          .stopMidiNote(channel: channel, midi: midi, velocity: velocity);
+    } catch (e) {
+      throw 'error stopping midi note: $e';
+    }
+  }
 
   /// This function plays a MIDI note with a given MIDI value and velocity using the
   /// FlutterMidiProPlatform.
@@ -62,7 +83,14 @@ class MidiPro {
   /// loudest. In the code snippet provided, the. Defaults to 64
   Future<Object?> playMidiNote({
     required int midi,
+    int channel = 0,
     int velocity = 64,
-  }) async =>
-      FlutterMidiProPlatform.instance.playMidiNote(midi: midi, velocity: velocity);
+  }) async {
+    try {
+      return FlutterMidiProPlatform.instance
+          .playMidiNote(channel: channel, midi: midi, velocity: velocity);
+    } catch (e) {
+      throw 'error playing midi note: $e';
+    }
+  }
 }

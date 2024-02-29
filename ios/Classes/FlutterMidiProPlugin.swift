@@ -17,7 +17,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
-      case "load_soundfont":
+      case "loadSoundfont":
         let map = call.arguments as? Dictionary<String, String>
         let data = map?["path"]
         let url = URL(fileURLWithPath: data!)
@@ -32,14 +32,14 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         }
         let message = "Prepared Sound Font"
         result(message)
-      case "play_midi_note":
+      case "playMidiNote":
         _arguments = call.arguments as! [String : Any];
         let note = UInt8(_arguments["note"] as! Int)
         let velocity = UInt8(_arguments["velocity"] as! Int)
         samplerNode.startNote(note, withVelocity: velocity, onChannel: 0)
         let message = "Playing: \(String(describing: note))"
         result(message)
-      case "stop_midi_note":
+      case "stopMidiNote":
         _arguments = call.arguments as! [String : Any];
         let note = UInt8(_arguments["note"] as! Int)
         samplerNode.stopNote(note, onChannel: 0)

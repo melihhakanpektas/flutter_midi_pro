@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_midi_pro/flutter_midi_pro_method_channel.dart';
@@ -25,33 +24,33 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  Future<String?> getPlatformVersion() {
-    throw UnimplementedError('platformVersion() has not been implemented.');
+  Future<Object?> loadSoundfont({required Uint8List sf2Data}) async {
+    throw UnimplementedError('loadSoundfont() has not been implemented.');
   }
 
-  Future<File?> writeToFile(ByteData data, {String name = 'instrument.sf2'}) {
-    throw UnimplementedError('Write to file has not been implemented.');
+  Future<Object?> isInitialized() async {
+    throw UnimplementedError('isInitialized() has not been implemented.');
   }
 
-  Future<Object?> loadSoundfont({
-    required ByteData? sf2Data,
-    String name = 'instrument.sf2',
-  }) async {
-    throw UnimplementedError('prepare() has not been implemented.');
+  Future<Object?> changeSoundfont({required Uint8List sf2Data}) async {
+    throw UnimplementedError('changeSoundfont() not been implemented.');
   }
 
-  Future<String?> changeSound({
-    required ByteData? sf2Data,
-    String name = 'instrument.sf2',
-  }) async {
-    throw UnimplementedError('changeSound() not been implemented.');
+  Future<Object?> getInstruments() {
+    throw UnimplementedError('getInstruments() has not been implemented.');
   }
 
-  Future<Object?> stopMidiNote({required int midi, required int velocity}) async {
+  Future<Object?> stopMidiNote(
+      {required int channel, required int midi, required int velocity}) async {
     throw UnimplementedError('stopMidiNote() has not been implemented.');
   }
 
-  Future<Object?> playMidiNote({required int midi, required int velocity}) async {
+  Future<Object?> playMidiNote(
+      {required int channel, required int midi, required int velocity}) async {
     throw UnimplementedError('playMidiNote()  has not been implemented.');
+  }
+
+  Future<Object?> dispose() async {
+    throw UnimplementedError('dispose() has not been implemented.');
   }
 }
