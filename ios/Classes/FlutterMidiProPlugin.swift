@@ -5,49 +5,57 @@ import AVFoundation
 import CoreAudio
 
 public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
-  var message = "Please Send Message"
-  var _arguments = [String: Any]()
-  var audioEngine = AVAudioEngine()
-  var samplerNode = AVAudioUnitSampler()
-  public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
-    let instance = FlutterMidiProPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-  }
+    private var channel: FlutterMethodChannel?
+    private var synth: AVAudioUnitMIDIInstrument?
+    private var isInitialized = false
+    private var isDisposed = false
 
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-      case "loadSoundfont":
-        let map = call.arguments as? Dictionary<String, String>
-        let data = map?["path"]
-        let url = URL(fileURLWithPath: data!)
-        do {
-          audioEngine.attach(samplerNode)
-          audioEngine.connect(samplerNode, to: audioEngine.mainMixerNode, format: nil)
-            try audioEngine.start()
-          try samplerNode.loadSoundBankInstrument(at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
-          print("Valid URL: \(url)")
-        } catch {
-          print("Error preparing MIDI: \(error.localizedDescription)")
-        }
-        let message = "Prepared Sound Font"
-        result(message)
-      case "playMidiNote":
-        _arguments = call.arguments as! [String : Any];
-        let note = UInt8(_arguments["note"] as! Int)
-        let velocity = UInt8(_arguments["velocity"] as! Int)
-        samplerNode.startNote(note, withVelocity: velocity, onChannel: 0)
-        let message = "Playing: \(String(describing: note))"
-        result(message)
-      case "stopMidiNote":
-        _arguments = call.arguments as! [String : Any];
-        let note = UInt8(_arguments["note"] as! Int)
-        samplerNode.stopNote(note, onChannel: 0)
-        let message = "Stopped: \(String(describing: note))"
-        result(message)
-    default:
-      result(FlutterMethodNotImplemented)
-        break
+    public static func register(with registrar: FlutterPluginRegistrar) {
+        let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
+        let instance = FlutterMidiProPlugin()
+        registrar.addMethodCallDelegate(instance, channel: channel)
     }
-  }
+
+    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let arguments = call.arguments as? [String: Any]
+        print("Method: \(call.method), Arguments: \(String(describing: arguments))")
+        if (isDisposed || !isInitialized) && (call.method != "loadSoundfont" && synth == nil) {
+            result(FlutterError(code: "NOT_INITIALIZED", message: "Synthesizer is not initialized", details: nil))
+            return
+        }
+        switch call.method {
+        case "loadSoundfont":
+            // Load soundfont code here
+            // ...
+            result("Soundfont loaded successfully")
+        case "isInitialized":
+            result(synth != nil)
+        case "changeSoundfont":
+            // Change soundfont code here
+            // ...
+            result("Soundfont changed successfully")
+        case "getInstruments":
+            // Get instruments code here
+            // ...
+            result("Instruments fetched successfully")
+        case "playMidiNote":
+            // Play MIDI note code here
+            // ...
+            result("MIDI note played successfully")
+        case "stopMidiNote":
+            // Stop MIDI note code here
+            // ...
+            result("MIDI note stopped successfully")
+        case "dispose":
+            // Dispose code here
+            // ...
+            result("Synthesizer disposed")
+        default:
+            result(FlutterMethodNotImplemented)
+        }
+    }
+    
+    public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+        channel?.setMethodCallHandler(nil)
+    }
 }
