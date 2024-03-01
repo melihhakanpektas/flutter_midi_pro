@@ -8,44 +8,44 @@ import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   /// The method channel used to interact with the native platform.
   @visibleForTesting
-  final basicMessageChannel = const BasicMessageChannel('flutter_midi_pro', StandardMessageCodec());
+  MethodChannel methodChannel = const MethodChannel('flutter_midi_pro');
 
   @override
   Future<Object?> loadSoundfont({required Uint8List sf2Data}) async {
-    return basicMessageChannel.send({'method': 'loadSoundfont', 'sf2Data': sf2Data});
+    return methodChannel.invokeMethod('loadSoundfont', {'sf2Data': sf2Data});
   }
 
   @override
   Future<Object?> isInitialized() async {
-    return basicMessageChannel.send({'method': 'isInitialized'});
+    return methodChannel.invokeMethod('isInitialized');
   }
 
   @override
   Future<Object?> changeSoundfont({required Uint8List sf2Data}) async {
-    return basicMessageChannel.send({'method': 'changeSoundfont', 'sf2Data': sf2Data});
+    return methodChannel.invokeMethod('changeSoundfont', {'sf2Data': sf2Data});
   }
 
   @override
   Future<Object?> getInstruments() async {
-    return basicMessageChannel.send({'method': 'getInstruments'});
+    return methodChannel.invokeMethod('getInstruments');
   }
 
   @override
   Future<Object?> playMidiNote(
       {required int channel, required int midi, required int velocity}) async {
-    return basicMessageChannel
-        .send({'method': 'playMidiNote', 'channel': channel, 'note': midi, 'velocity': velocity});
+    return methodChannel
+        .invokeMethod('playMidiNote', {'channel': channel, 'note': midi, 'velocity': velocity});
   }
 
   @override
   Future<Object?> stopMidiNote(
       {required int channel, required int midi, required int velocity}) async {
-    return basicMessageChannel
-        .send({'method': 'stopMidiNote', 'channel': channel, 'note': midi, 'velocity': velocity});
+    return methodChannel
+        .invokeMethod('stopMidiNote', {'channel': channel, 'note': midi, 'velocity': velocity});
   }
 
   @override
   Future<Object?> dispose() async {
-    return basicMessageChannel.send({'method': 'dispose'});
+    return methodChannel.invokeMethod('dispose');
   }
 }

@@ -9,9 +9,13 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MainPage(),
+      theme: ThemeData(
+        colorSchemeSeed: Colors.amber,
+        brightness: Brightness.dark,
+      ),
+      home: const MainPage(),
     );
   }
 }
