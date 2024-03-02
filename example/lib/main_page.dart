@@ -34,7 +34,7 @@ class _MainPageState extends State<MainPage> {
   }
 
   void stop({required int midiIndex}) {
-    midiPro.stopMidiNote(midi: midiIndex).then((value) => debugPrint('stop: $midiIndex'));
+    //midiPro.stopMidiNote(midi: midiIndex).then((value) => debugPrint('stop: $midiIndex'));
   }
 
   @override
@@ -108,6 +108,16 @@ class _MainPageState extends State<MainPage> {
                                   : null,
                               child: Text('Load Instrument $instrumentIndexValue'));
                         }),
+                    const SizedBox(
+                      height: 10,
+                    ),
+                    ElevatedButton(
+                        onPressed: isMidiInitializedValue
+                            ? () {
+                                midiPro.stopAllMidiNotes();
+                              }
+                            : null,
+                        child: const Text('Stop All Notes')),
                     Padding(
                         padding: const EdgeInsets.all(18),
                         child: ValueListenableBuilder(

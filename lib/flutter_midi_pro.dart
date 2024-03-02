@@ -86,6 +86,18 @@ class MidiPro {
     }
   }
 
+  /// This function stops all MIDI notes that are currently playing.
+  Future<Object?> stopAllMidiNotes() async {
+    if (!_initialized) {
+      throw 'Soundfont not initialized';
+    }
+    try {
+      return FlutterMidiProPlatform.instance.stopAllMidiNotes();
+    } catch (e) {
+      throw 'error stopping all midi notes: $e';
+    }
+  }
+
   /// This function disposes of the FlutterMidiProPlatform.
   /// This function should be called when the FlutterMidiPro object is no longer needed.
   /// It is important to call this function to free up resources and avoid memory leaks.

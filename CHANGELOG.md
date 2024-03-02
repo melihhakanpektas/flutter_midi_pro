@@ -18,7 +18,11 @@
 
 - Instance error fixed.
 
-## 1.1.0
+## 2.0.0
 
-- Added instrument channel support for android.
--
+- Instrument change added.
+- Faster and more stable especially for Android.
+
+## 2.0.1
+
+- Stop all notes added.

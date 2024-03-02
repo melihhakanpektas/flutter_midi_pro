@@ -32,6 +32,11 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
+  Future<Object?> stopAllMidiNotes() async {
+    return methodChannel.invokeMethod('stopAllMidiNotes');
+  }
+
+  @override
   Future<Object?> dispose() async {
     return methodChannel.invokeMethod('dispose');
   }

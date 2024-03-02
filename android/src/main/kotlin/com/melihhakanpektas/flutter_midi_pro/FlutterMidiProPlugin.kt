@@ -93,6 +93,21 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
           result.error("STOP_ERROR", "Failed to stop MIDI note: ${e.message}", null)
         }
       }
+      "stopAllMidiNotes" -> {
+        if (sf == null) {
+          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
+        }
+        try {
+          for (i in 0..127) {
+            msg.setMessage(ShortMessage.NOTE_OFF, 0, i, 0)
+            recv.send(msg, -1)
+          }
+          result.success("All MIDI notes stopped successfully")
+        } catch (e: InvalidMidiDataException) {
+          e.printStackTrace()
+          result.error("STOP_ERROR", "Failed to stop all MIDI notes: ${e.message}", null)
+        }
+      }
       "dispose" -> {
         synth.close()
         result.success("Synthesizer disposed")
