@@ -12,33 +12,24 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   final _midi = MidiPro();
-  bool isPlayingMelody = false;
-  final channel = ValueNotifier<int>(0);
+  final instrumentIndex = ValueNotifier<int>(0);
   final volume = ValueNotifier<int>(127);
-  final changeSF2 = ValueNotifier<bool>(false);
-  final instrumentList = ValueNotifier<List<String>>([]);
-  Future load(String asset) async {
-    await _midi.loadSoundfont(sf2Path: asset).then((value) async {
-      instrumentList.value = await _midi.getInstruments();
-      channel.value = 0;
-    });
+  Future load(int instrumentIndex) async {
+    await _midi.loadInstrument(sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex);
   }
 
   Map<int, NoteModel> pointerAndNote = {};
 
-  void play(int midi, {int channel = 1, int velocity = 127}) {
-    _midi
-        .playMidiNote(midi: midi, velocity: velocity, channel: channel)
-        .then((value) => debugPrint('play: $midi'));
+  void play(int midi, {int velocity = 127}) {
+    _midi.playMidiNote(midi: midi, velocity: velocity).then((value) => debugPrint('play: $midi'));
   }
 
-  void stop({required int midi, int channel = 1}) {
-    _midi.stopMidiNote(midi: midi, channel: channel).then((value) => debugPrint('stop: $midi'));
+  void stop({required int midi}) {
+    _midi.stopMidiNote(midi: midi).then((value) => debugPrint('stop: $midi'));
   }
 
   @override
   void initState() {
-    load('assets/SalC5Light2.sf2');
     super.initState();
   }
 
@@ -61,44 +52,34 @@ class _MainPageState extends State<MainPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           ValueListenableBuilder(
-              valueListenable: instrumentList,
-              builder: (context, instrumentListValue, child) {
-                if (instrumentListValue.isEmpty) {
-                  return const CircularProgressIndicator();
-                } else {
-                  return ValueListenableBuilder(
-                      valueListenable: channel,
-                      builder: (context, channelValue, child) {
-                        return DropdownButton<int>(
-                            value: channelValue,
-                            items: (instrumentListValue)
-                                .asMap()
-                                .entries
-                                .map((e) => DropdownMenuItem<int>(
-                                    value: e.key,
-                                    child: Text('${e.key + 1}) ${e.value}',
-                                        style: const TextStyle(fontSize: 20))))
-                                .toList(),
-                            onChanged: (int? value) {
-                              if (value != null) {
-                                channel.value = value;
-                              }
-                            });
-                      });
-                }
+              valueListenable: instrumentIndex,
+              builder: (context, channelValue, child) {
+                return DropdownButton<int>(
+                    value: channelValue,
+                    items: [
+                      for (int i = 0; i < 128; i++)
+                        DropdownMenuItem<int>(
+                          value: i,
+                          child: Text('Instrument $i'),
+                        )
+                    ],
+                    onChanged: (int? value) {
+                      if (value != null) {
+                        instrumentIndex.value = value;
+                      }
+                    });
               }),
           const SizedBox(
             height: 10,
           ),
           ValueListenableBuilder(
-              valueListenable: changeSF2,
-              builder: (context, value, child) {
+              valueListenable: instrumentIndex,
+              builder: (context, instrumentIndexValue, child) {
                 return ElevatedButton(
                     onPressed: () {
-                      load(value ? 'assets/SalC5Light2.sf2' : 'assets/TimGM6mb.sf2');
-                      changeSF2.value = !value;
+                      load(instrumentIndexValue);
                     },
-                    child: Text(value ? 'Change to SalC5Light2' : 'Change to TimGM6mb'));
+                    child: Text('Load Instrument $instrumentIndexValue in TimGM6mb.sf2'));
               }),
           Padding(
               padding: const EdgeInsets.all(18),
@@ -129,7 +110,7 @@ class _MainPageState extends State<MainPage> {
             noteCount: 15,
             onTapDown: (NoteModel? note, int tapId) {
               if (note == null) return;
-              play(note.midiNoteNumber, channel: channel.value, velocity: volume.value);
+              play(note.midiNoteNumber, velocity: volume.value);
               setState(() => pointerAndNote[tapId] = note);
               debugPrint(
                   'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
@@ -137,14 +118,14 @@ class _MainPageState extends State<MainPage> {
             onTapUpdate: (NoteModel? note, int tapId) {
               if (note == null) return;
               if (pointerAndNote[tapId] == note) return;
-              stop(midi: pointerAndNote[tapId]!.midiNoteNumber, channel: channel.value);
-              play(note.midiNoteNumber, channel: channel.value, velocity: volume.value);
+              stop(midi: pointerAndNote[tapId]!.midiNoteNumber);
+              play(note.midiNoteNumber, velocity: volume.value);
               setState(() => pointerAndNote[tapId] = note);
               debugPrint(
                   'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
             },
             onTapUp: (int tapId) {
-              stop(midi: pointerAndNote[tapId]!.midiNoteNumber, channel: channel.value);
+              stop(midi: pointerAndNote[tapId]!.midiNoteNumber);
               setState(() => pointerAndNote.remove(tapId));
               debugPrint('UP: tapId= $tapId');
             },
