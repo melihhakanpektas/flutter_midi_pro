@@ -71,6 +71,9 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let note = UInt8(_arguments["note"] as! Int)
         samplerNode.stopNote(note, onChannel: 0)
         result(nil)
+    case "stopAllNotes":
+        samplerNode.stopAllNotes()
+        result(nil)
     case "dispose":
         audioEngine.stop()
         audioEngine.detach(samplerNode)
