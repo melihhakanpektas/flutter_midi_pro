@@ -17,7 +17,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
-    case "loadSoundfont":
+    case "loadInstrument":
         guard let map = call.arguments as? Dictionary<String, Any>,
               let sf2Data = map["sf2Data"] as? FlutterStandardTypedData else {
             result(FlutterError(code: "INVALID_ARGUMENT", message: "sf2Data is required and must be a FlutterStandardTypedData", details: nil))
