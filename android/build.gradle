@@ -53,7 +53,3 @@ android {
         minSdkVersion 16
     }
 }
-
-dependencies {
-    implementation 'com.github.agangzz:SherlockMidi:18863172e2'
-}

@@ -11,7 +11,7 @@ To use this plugin, add `flutter_midi_pro` as a [dependency in your pubspec.yaml
 
 ```yaml
 dependencies:
-  flutter_midi_pro: ^1.0.0
+  flutter_midi_pro: ^2.0.0
 ```
 
 ## Usage
@@ -25,39 +25,43 @@ import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 ### Create a MidiPro Variable
 
 ```dart
-final _midiPro = MidiPro();
+final midiPro = MidiPro();
 ```
 
 ### Load SoundFont File
 
-Use the `loadSoundfont` function to load a SoundFont file with optional `ByteData` and a specified name.
+Use the `loadSoundfont` function to load a SoundFont file.
 
 ```dart
-final String _path = 'assets/tight_piano.sf2';
-Future loadSoundfont(String asset) async {
-    ByteData byte = await rootBundle.load(asset);
-    _midiPro.loadSoundfont(
-    sf2Data: byte, name: _path.replaceAll('assets/', ''));
-    }
+final String _path = 'assets/your_soundbank.sf2';
+    await _midi.loadSoundfont(sf2Path: _path)
+```
+
+### Get Instrument List
+
+Use the `getInstruments` function to get a list of instruments from the SoundFont file.
+
+```dart
+final List<String> instruments = await _midiPro.getInstruments();
 ```
 
 ### Play MIDI Note
 
-Use the `playMidiNote` function to play a MIDI note with a given MIDI value and velocity.
+Use the `playMidiNote` function to play a MIDI note with a given MIDI value, velocity and channel.
 
 ```dart
 play(int midi, {int velocity = 127}) {
-    _midiPro.playMidiNote(midi: midi, velocity: velocity);
+    _midiPro.playMidiNote(midi: midi, velocity: velocity, channel: 0);
   }
 ```
 
 ### Stop MIDI Note
 
-Use the `stopMidiNote` function to stop a MIDI note with a given MIDI number and velocity.
+Use the `stopMidiNote` function to stop a MIDI note with a given MIDI number and channel.
 
 ```dart
 void stop(int midi) {
-    _midiPro.stopMidiNote(midi: midi);
+    _midiPro.stopMidiNote(midi: midi, channel: 0);
   }
 ```
 

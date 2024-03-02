@@ -1,6 +1,6 @@
 name: flutter_midi_pro
 description: The `flutter_midi_pro` plugin provides functions for loading SoundFont (.sf2) files, as well as playing and stopping MIDI notes.
-version: 1.0.6
+version: 2.0.0
 repository: https://github.com/MelihHakanPektas/flutter_midi_pro
 
 environment:
@@ -10,11 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  path_provider: ^2.0.14
-  plugin_platform_interface: ^2.0.2
+  path_provider: ^2.1.2
+  plugin_platform_interface: ^2.1.8
 
 dev_dependencies:
-  flutter_lints: ^2.0.0
+  flutter_lints: ^3.0.1
   flutter_test:
     sdk: flutter
 
