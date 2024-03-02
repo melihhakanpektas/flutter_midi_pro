@@ -11,37 +11,19 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   MethodChannel methodChannel = const MethodChannel('flutter_midi_pro');
 
   @override
-  Future<Object?> loadSoundfont({required Uint8List sf2Data}) async {
-    return methodChannel.invokeMethod('loadSoundfont', {'sf2Data': sf2Data});
-  }
-
-  @override
-  Future<Object?> isInitialized() async {
-    return methodChannel.invokeMethod('isInitialized');
-  }
-
-  @override
-  Future<Object?> changeSoundfont({required Uint8List sf2Data}) async {
-    return methodChannel.invokeMethod('changeSoundfont', {'sf2Data': sf2Data});
-  }
-
-  @override
-  Future<Object?> getInstruments() async {
-    return methodChannel.invokeMethod('getInstruments');
-  }
-
-  @override
-  Future<Object?> playMidiNote(
-      {required int channel, required int midi, required int velocity}) async {
+  Future<Object?> loadInstrument({required Uint8List sf2Data, required int instrumentIndex}) async {
     return methodChannel
-        .invokeMethod('playMidiNote', {'channel': channel, 'note': midi, 'velocity': velocity});
+        .invokeMethod('loadInstrument', {'sf2Data': sf2Data, 'instrumentIndex': instrumentIndex});
   }
 
   @override
-  Future<Object?> stopMidiNote(
-      {required int channel, required int midi, required int velocity}) async {
-    return methodChannel
-        .invokeMethod('stopMidiNote', {'channel': channel, 'note': midi, 'velocity': velocity});
+  Future<Object?> playMidiNote({required int midi, required int velocity}) async {
+    return methodChannel.invokeMethod('playMidiNote', {'note': midi, 'velocity': velocity});
+  }
+
+  @override
+  Future<Object?> stopMidiNote({required int midi, required int velocity}) async {
+    return methodChannel.invokeMethod('stopMidiNote', {'note': midi, 'velocity': velocity});
   }
 
   @override
