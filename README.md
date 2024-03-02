@@ -11,7 +11,7 @@ To use this plugin, add `flutter_midi_pro` as a [dependency in your pubspec.yaml
 
 ```yaml
 dependencies:
-  flutter_midi_pro: ^2.0.0
+  flutter_midi_pro: ^2.0.1
 ```
 
 ## Usage

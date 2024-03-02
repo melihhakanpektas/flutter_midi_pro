@@ -22,3 +22,7 @@
 
 - Instrument change added.
 - Faster and more stable especially for Android.
+
+## 2.0.1
+
+- Stop all notes added.
