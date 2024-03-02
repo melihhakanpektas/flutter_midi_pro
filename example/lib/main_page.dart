@@ -11,26 +11,30 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  final _midi = MidiPro();
+  final midiPro = MidiPro();
+  ValueNotifier<bool> isMidiInitialized = ValueNotifier<bool>(false);
   final instrumentIndex = ValueNotifier<int>(0);
   final volume = ValueNotifier<int>(127);
   Future loadSoundfont() async {
-    await _midi.loadSoundfont(
-        sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex.value);
+    await midiPro
+        .loadSoundfont(sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex.value)
+        .then((value) => isMidiInitialized.value = true);
   }
 
   Future loadInstrument() async {
-    await _midi.loadInstrument(instrumentIndex: instrumentIndex.value);
+    await midiPro.loadInstrument(instrumentIndex: instrumentIndex.value);
   }
 
   Map<int, NoteModel> pointerAndNote = {};
 
-  void play(int midi, {int velocity = 127}) {
-    _midi.playMidiNote(midi: midi, velocity: velocity).then((value) => debugPrint('play: $midi'));
+  void play(int midiIndex, {int velocity = 127}) {
+    midiPro
+        .playMidiNote(midi: midiIndex, velocity: velocity)
+        .then((value) => debugPrint('play: $midiIndex'));
   }
 
-  void stop({required int midi}) {
-    _midi.stopMidiNote(midi: midi).then((value) => debugPrint('stop: $midi'));
+  void stop({required int midiIndex}) {
+    midiPro.stopMidiNote(midi: midiIndex).then((value) => debugPrint('stop: $midiIndex'));
   }
 
   @override
@@ -41,7 +45,7 @@ class _MainPageState extends State<MainPage> {
   @override
   void dispose() {
     super.dispose();
-    _midi.dispose();
+    midiPro.dispose();
   }
 
   @override
@@ -89,63 +93,91 @@ class _MainPageState extends State<MainPage> {
             height: 10,
           ),
           ValueListenableBuilder(
-              valueListenable: instrumentIndex,
-              builder: (context, instrumentIndexValue, child) {
-                return ElevatedButton(
-                    onPressed: () {
-                      loadInstrument();
-                    },
-                    child: Text('Load Instrument $instrumentIndexValue'));
-              }),
-          Padding(
-              padding: const EdgeInsets.all(18),
-              child: ValueListenableBuilder(
-                  valueListenable: volume,
-                  child: const Text('Volume: '),
-                  builder: (context, value, child) {
-                    return Row(
+              valueListenable: isMidiInitialized,
+              builder: (context, isMidiInitializedValue, child) {
+                return Column(
+                  children: [
+                    ValueListenableBuilder(
+                        valueListenable: instrumentIndex,
+                        builder: (context, instrumentIndexValue, child) {
+                          return ElevatedButton(
+                              onPressed: isMidiInitializedValue
+                                  ? () {
+                                      loadInstrument();
+                                    }
+                                  : null,
+                              child: Text('Load Instrument $instrumentIndexValue'));
+                        }),
+                    Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: ValueListenableBuilder(
+                            valueListenable: volume,
+                            child: const Text('Volume: '),
+                            builder: (context, value, child) {
+                              return Row(
+                                children: [
+                                  child!,
+                                  Expanded(
+                                      child: Slider(
+                                    value: value.toDouble(),
+                                    min: 0,
+                                    max: 127,
+                                    onChanged: isMidiInitializedValue
+                                        ? (value) {
+                                            volume.value = value.toInt();
+                                          }
+                                        : null,
+                                  )),
+                                  const SizedBox(
+                                    width: 10,
+                                  ),
+                                  Text('${volume.value}'),
+                                ],
+                              );
+                            })),
+                    Stack(
                       children: [
-                        child!,
-                        Expanded(
-                            child: Slider(
-                          value: value.toDouble(),
-                          min: 0,
-                          max: 127,
-                          onChanged: (value) {
-                            volume.value = value.toInt();
+                        PianoPro(
+                          noteCount: 15,
+                          onTapDown: (NoteModel? note, int tapId) {
+                            if (note == null) return;
+                            play(note.midiNoteNumber, velocity: volume.value);
+                            setState(() => pointerAndNote[tapId] = note);
+                            debugPrint(
+                                'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
                           },
-                        )),
-                        const SizedBox(
-                          width: 10,
+                          onTapUpdate: (NoteModel? note, int tapId) {
+                            if (note == null) return;
+                            if (pointerAndNote[tapId] == note) return;
+                            stop(midiIndex: pointerAndNote[tapId]!.midiNoteNumber);
+                            play(note.midiNoteNumber, velocity: volume.value);
+                            setState(() => pointerAndNote[tapId] = note);
+                            debugPrint(
+                                'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
+                          },
+                          onTapUp: (int tapId) {
+                            stop(midiIndex: pointerAndNote[tapId]!.midiNoteNumber);
+                            setState(() => pointerAndNote.remove(tapId));
+                            debugPrint('UP: tapId= $tapId');
+                          },
                         ),
-                        Text('${volume.value}'),
+                        if (!isMidiInitializedValue)
+                          Positioned.fill(
+                            child: Container(
+                              color: Colors.black.withOpacity(0.5),
+                              child: const Center(
+                                child: Text(
+                                  'Load Soundfont file\nMust be called before other methods',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          )
                       ],
-                    );
-                  })),
-          PianoPro(
-            noteCount: 15,
-            onTapDown: (NoteModel? note, int tapId) {
-              if (note == null) return;
-              play(note.midiNoteNumber, velocity: volume.value);
-              setState(() => pointerAndNote[tapId] = note);
-              debugPrint(
-                  'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
-            },
-            onTapUpdate: (NoteModel? note, int tapId) {
-              if (note == null) return;
-              if (pointerAndNote[tapId] == note) return;
-              stop(midi: pointerAndNote[tapId]!.midiNoteNumber);
-              play(note.midiNoteNumber, velocity: volume.value);
-              setState(() => pointerAndNote[tapId] = note);
-              debugPrint(
-                  'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
-            },
-            onTapUp: (int tapId) {
-              stop(midi: pointerAndNote[tapId]!.midiNoteNumber);
-              setState(() => pointerAndNote.remove(tapId));
-              debugPrint('UP: tapId= $tapId');
-            },
-          )
+                    )
+                  ],
+                );
+              }),
         ],
       )),
     );

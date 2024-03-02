@@ -30,39 +30,34 @@ final midiPro = MidiPro();
 
 ### Load SoundFont File
 
-Use the `loadSoundfont` function to load a SoundFont file.
+Use the `loadSoundfont` function to load a SoundFont file. You can either load the SoundFont file from an asset or from a file path. You can also specify the instrument index to load a specific instrument from the SoundFont file.
 
 ```dart
-final String _path = 'assets/your_soundbank.sf2';
-    await _midi.loadSoundfont(sf2Path: _path)
-```
-
-### Get Instrument List
-
-Use the `getInstruments` function to get a list of instruments from the SoundFont file.
-
-```dart
-final List<String> instruments = await _midiPro.getInstruments();
+await midiPro.loadSoundfont(sf2Path: 'YOUR SOUNDFONT FILE PATH', instrumentIndex: 0);
 ```
 
 ### Play MIDI Note
 
-Use the `playMidiNote` function to play a MIDI note with a given MIDI value, velocity and channel.
+Use the `playMidiNote` function to play a MIDI note with a given MIDI value and velocity.
 
 ```dart
-play(int midi, {int velocity = 127}) {
-    _midiPro.playMidiNote(midi: midi, velocity: velocity, channel: 0);
-  }
+midiPro.playMidiNote(midi: midiIndex, velocity: velocity)
 ```
 
 ### Stop MIDI Note
 
-Use the `stopMidiNote` function to stop a MIDI note with a given MIDI number and channel.
+Use the `stopMidiNote` function to stop a MIDI note with a given MIDI number.
 
 ```dart
-void stop(int midi) {
-    _midiPro.stopMidiNote(midi: midi, channel: 0);
-  }
+midiPro.stopMidiNote(midi: midiIndex);
+```
+
+### Load Instrument
+
+Use the `loadInstrument` function to load a specific instrument from the SoundFont file.
+
+```dart
+await midiPro.loadInstrument(instrumentIndex: 0);
 ```
 
 ## Example
@@ -71,90 +66,171 @@ Here's an example of how you could use the `flutter_midi_pro` plugin to play a p
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:flutter_piano_pro/flutter_piano_pro.dart';
 import 'package:flutter_piano_pro/note_model.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+class MainPage extends StatefulWidget {
+  const MainPage({super.key});
 
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
   @override
-  State<MyApp> createState() => _MyAppState();
+  State<MainPage> createState() => _MainPageState();
 }
 
-class _MyAppState extends State<MyApp> {
-  final _midiPro = MidiPro();
-  final String _value = 'assets/tight_piano.sf2';
+class _MainPageState extends State<MainPage> {
+  final _midi = MidiPro();
+  final instrumentIndex = ValueNotifier<int>(0);
+  final volume = ValueNotifier<int>(127);
+  Future loadSoundfont() async {
+    await _midi.loadSoundfont(
+        sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex.value);
+  }
+
+  Future loadInstrument() async {
+    await _midi.loadInstrument(instrumentIndex: instrumentIndex.value);
+  }
+
   Map<int, NoteModel> pointerAndNote = {};
 
-  Future<void> load(String asset) async {
-    ByteData byte = await rootBundle.load(asset);
-    _midiPro.loadSoundfont(
-        sf2Data: byte, name: _value.replaceAll('assets/', ''));
-  }
-
   void play(int midi, {int velocity = 127}) {
-    _midiPro.playMidiNote(midi: midi, velocity: velocity);
+    _midi.playMidiNote(midi: midi, velocity: velocity).then((value) => debugPrint('play: $midi'));
   }
 
-  void stop(int midi) {
-    _midiPro.stopMidiNote(midi: midi);
+  void stop({required int midi}) {
+    _midi.stopMidiNote(midi: midi).then((value) => debugPrint('stop: $midi'));
   }
 
   @override
   void initState() {
-    load(_value);
     super.initState();
   }
 
   @override
+  void dispose() {
+    super.dispose();
+    _midi.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Flutter Midi Pro Example'),
-        ),
-        body: Center(
-            child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            PianoPro(
-              noteCount: 15,
-              onTapDown: (NoteModel? note, int tapId) {
-                if (note == null) return;
-                play(note.midiNoteNumber);
-                setState(() => pointerAndNote[tapId] = note);
-              },
-              onTapUpdate: (NoteModel? note, int tapId) {
-                if (note == null) return;
-                if (pointerAndNote[tapId] == note) return;
-                stop(pointerAndNote[tapId]!.midiNoteNumber);
-                play(note.midiNoteNumber);
-                pointerAndNote[tapId] = note;
-              },
-              onTapUp: (int tapId) {
-                stop(pointerAndNote[tapId]!.midiNoteNumber);
-                pointerAndNote.remove(tapId);
-              },
-            )
-          ],
-        )),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Flutter Midi Pro Example'),
       ),
+      body: Center(
+          child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          ValueListenableBuilder(
+              valueListenable: instrumentIndex,
+              builder: (context, channelValue, child) {
+                return DropdownButton<int>(
+                    value: channelValue,
+                    items: [
+                      for (int i = 0; i < 128; i++)
+                        DropdownMenuItem<int>(
+                          value: i,
+                          child: Text('Instrument $i'),
+                        )
+                    ],
+                    onChanged: (int? value) {
+                      if (value != null) {
+                        instrumentIndex.value = value;
+                      }
+                    });
+              }),
+          const SizedBox(
+            height: 10,
+          ),
+          ElevatedButton(
+              onPressed: () {
+                loadSoundfont();
+              },
+              child: const Text(
+                'Load Soundfont file\nMust be called before other methods',
+                textAlign: TextAlign.center,
+              )),
+          const SizedBox(
+            height: 10,
+          ),
+          ValueListenableBuilder(
+              valueListenable: instrumentIndex,
+              builder: (context, instrumentIndexValue, child) {
+                return ElevatedButton(
+                    onPressed: () {
+                      loadInstrument();
+                    },
+                    child: Text('Load Instrument $instrumentIndexValue'));
+              }),
+          Padding(
+              padding: const EdgeInsets.all(18),
+              child: ValueListenableBuilder(
+                  valueListenable: volume,
+                  child: const Text('Volume: '),
+                  builder: (context, value, child) {
+                    return Row(
+                      children: [
+                        child!,
+                        Expanded(
+                            child: Slider(
+                          value: value.toDouble(),
+                          min: 0,
+                          max: 127,
+                          onChanged: (value) {
+                            volume.value = value.toInt();
+                          },
+                        )),
+                        const SizedBox(
+                          width: 10,
+                        ),
+                        Text('${volume.value}'),
+                      ],
+                    );
+                  })),
+          PianoPro(
+            noteCount: 15,
+            onTapDown: (NoteModel? note, int tapId) {
+              if (note == null) return;
+              play(note.midiNoteNumber, velocity: volume.value);
+              setState(() => pointerAndNote[tapId] = note);
+              debugPrint(
+                  'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
+            },
+            onTapUpdate: (NoteModel? note, int tapId) {
+              if (note == null) return;
+              if (pointerAndNote[tapId] == note) return;
+              stop(midi: pointerAndNote[tapId]!.midiNoteNumber);
+              play(note.midiNoteNumber, velocity: volume.value);
+              setState(() => pointerAndNote[tapId] = note);
+              debugPrint(
+                  'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
+            },
+            onTapUp: (int tapId) {
+              stop(midi: pointerAndNote[tapId]!.midiNoteNumber);
+              setState(() => pointerAndNote.remove(tapId));
+              debugPrint('UP: tapId= $tapId');
+            },
+          )
+        ],
+      )),
     );
   }
 }
+
 ```
 
 ## Contributions
 
 Contributions are welcome! Please feel free to submit a PR or open an issue.
+
+### TODOS
+
+- [ ] Add support for Web, Windows, and Linux.
+- [ ] Add support for channel feature (MIDI Channels).
+- [ ] Add controller support
+- [ ] Add support for MIDI files.
 
 ### Contact
 
