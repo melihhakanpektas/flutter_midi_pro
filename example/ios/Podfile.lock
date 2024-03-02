@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
-  flutter_midi_pro: d42f8cff74562d1e74f2b880d04e6ef310b71833
+  flutter_midi_pro: 0a87e01e0bd9695047b0654dcbb61ce6d82621be
   path_provider_foundation: 3784922295ac71e43754bd15e0653ccfd36a147c
 
 PODFILE CHECKSUM: 819463e6a0290f5a72f145ba7cde16e8b6ef0796
