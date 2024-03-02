@@ -4,16 +4,36 @@ import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 /// The FlutterMidiPro class provides functions for writing to and loading soundfont
 /// files, as well as playing and stopping MIDI notes.
 class MidiPro {
+  bool _initialized = false;
+
+  bool get initialized => _initialized;
+
   /// This function loads an instrument in a soundfont file from the given path using the
   /// FlutterMidiProPlatform.
   /// Args:
   ///  sf2Path (String): The path to the soundfont file to be loaded.
   /// instrumentIndex (int): The index of the instrument to be loaded. Defaults to 0.
-  Future<Object?> loadInstrument({required String sf2Path, int instrumentIndex = 0}) async {
+  Future<Object?> loadSoundfont({required String sf2Path, int instrumentIndex = 0}) async {
     try {
       final sf2Data = await rootBundle.load(sf2Path).then((value) => value.buffer.asUint8List());
       return FlutterMidiProPlatform.instance
-          .loadInstrument(sf2Data: sf2Data, instrumentIndex: instrumentIndex);
+          .loadSoundfont(sf2Data: sf2Data, instrumentIndex: instrumentIndex)
+          .whenComplete(() => _initialized = true);
+    } catch (e) {
+      throw 'error loading Soundfont: $e';
+    }
+  }
+
+  /// This function loads an instrument in a initialized soundfont file from the given path using the
+  /// FlutterMidiProPlatform.
+  /// Args:
+  ///  instrumentIndex (int): The index of the instrument to be loaded. Defaults to 0.
+  Future<Object?> loadInstrument({required int instrumentIndex}) async {
+    if (!_initialized) {
+      throw 'Soundfont not initialized';
+    }
+    try {
+      return FlutterMidiProPlatform.instance.loadInstrument(instrumentIndex: instrumentIndex);
     } catch (e) {
       throw 'error loading instrument: $e';
     }
@@ -33,6 +53,9 @@ class MidiPro {
     required int midi,
     int velocity = 64,
   }) async {
+    if (!_initialized) {
+      throw 'Soundfont not initialized';
+    }
     try {
       return FlutterMidiProPlatform.instance.playMidiNote(midi: midi, velocity: velocity);
     } catch (e) {
@@ -53,6 +76,9 @@ class MidiPro {
     required int midi,
     int velocity = 127,
   }) async {
+    if (!_initialized) {
+      throw 'Soundfont not initialized';
+    }
     try {
       return FlutterMidiProPlatform.instance.stopMidiNote(midi: midi, velocity: velocity);
     } catch (e) {
@@ -64,6 +90,9 @@ class MidiPro {
   /// This function should be called when the FlutterMidiPro object is no longer needed.
   /// It is important to call this function to free up resources and avoid memory leaks.
   Future<Object?> dispose() async {
+    if (!_initialized) {
+      throw 'Soundfont not initialized';
+    }
     try {
       return FlutterMidiProPlatform.instance.dispose();
     } catch (e) {

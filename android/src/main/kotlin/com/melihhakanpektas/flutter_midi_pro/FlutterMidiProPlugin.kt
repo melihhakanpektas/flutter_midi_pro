@@ -12,16 +12,15 @@ import com.melihhakanpektas.midisynthesizer.midi.Receiver
 import com.melihhakanpektas.midisynthesizer.midi.ShortMessage
 import java.io.File
 import java.io.IOException
-import kotlin.math.min
+import kotlinx.coroutines.*
 
 /** FlutterMidiProPlugin */
 class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   private lateinit var channel : MethodChannel
-  private var recv: Receiver? = null
-  private var synth: SoftSynthesizer? = null
+  private val synth: SoftSynthesizer = SoftSynthesizer()
+  private val recv: Receiver = synth.receiver
   private val msg = ShortMessage()
-    private var isInitialized = false
-    private var isDisposed = false
+  private var sf: SF2Soundbank? = null
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
@@ -29,31 +28,20 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   }
 
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
-    val arguments = call.arguments as? Map<*, *> ? // Handle the null case here.
+    val arguments = call.arguments as? Map<*, *> ?
 
-    println( "Method: ${call.method}, Arguments: $arguments")
-    if((isDisposed || !isInitialized) && (call.method != "loadSoundfont" && synth == null)){
-      result.error("NOT_INITIALIZED", "Synthesizer is not initialized", null)
-      return
-    }
+    CoroutineScope(Dispatchers.IO).launch {
     when (call.method) {
       "loadSoundfont" -> {
         val data = arguments!!["sf2Data"] as ByteArray
+        val instrumentIndex = arguments["instrumentIndex"] as Int
         try {
-            val file = File.createTempFile("soundfont", ".sf2")
-            file.writeBytes(data)
-          val sf = SF2Soundbank(file)
-          synth = SoftSynthesizer()
-          synth!!.open()
-          synth!!.loadAllInstruments(sf)
-          for ( i in 0 until min(synth!!.channels.size, 16)){
-            synth!!.channels[i].programChange(i)
-          }
-          recv = synth!!.receiver
-          isInitialized = true
-          if(synth!!.channels.size > 16){
-            result.success("Soundfont loaded successfully, but only 16 channels are available")
-          }
+          val file = File.createTempFile("temp", ".sf2")
+          file.writeBytes(data)
+          sf = SF2Soundbank(file)
+          synth.open()
+          synth.loadAllInstruments(sf!!)
+          synth.channels[0].programChange(instrumentIndex)
           result.success("Soundfont loaded successfully")
         } catch (e: IOException) {
           result.error("LOAD_ERROR", "Failed to load soundfont: ${e.message}", null)
@@ -61,45 +49,29 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
           result.error("LOAD_ERROR", "Failed to open synthesizer: ${e.message}", null)
         }
       }
-      "isInitialized" -> {
-        result.success(synth != null && recv != null)
-      }
-      "changeSoundfont"-> {
-        val data = arguments!!["sf2Data"] as ByteArray
+      "loadInstrument" -> {
+        val instrumentIndex = arguments!!["instrumentIndex"] as Int
+        if (sf == null) {
+          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
+        }
         try {
-          val file = File.createTempFile("soundfont", ".sf2")
-          file.writeBytes(data)
-          val sf = SF2Soundbank(file)
-          synth?.loadAllInstruments(sf)
-          for ( i in 0 until min(synth!!.channels.size, 16)){
-            synth!!.channels[i].programChange(i)
-          }
-          recv = synth!!.receiver
-          result.success("Soundfont changed successfully")
+          synth.channels[0].programChange(instrumentIndex)
+          result.success("Soundfont loaded successfully")
         } catch (e: IOException) {
-          e.printStackTrace()
-          result.error("LOAD_ERROR", "Failed to change soundfont: ${e.message}", null)
+          result.error("LOAD_ERROR", "Failed to load instrument: ${e.message}", null)
+        } catch (e: MidiUnavailableException) {
+          result.error("LOAD_ERROR", "Failed to open synthesizer: ${e.message}", null)
         }
-      }
-      "getInstruments" -> {
-        if (synth == null) {
-          result.error("NOT_INITIALIZED", "Synthesizer is not initialized", null)
-          return
-        }
-        val instruments = synth!!.loadedInstruments.map { it.name }
-        result.success(instruments.take(16)) // Only 16 channels are available (0-15)
       }
       "playMidiNote" -> {
+        if (sf == null) {
+          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
+        }
         val note = arguments!!["note"] as Int
         val velocity = arguments["velocity"] as Int
-        val channel = arguments["channel"] as Int
         try {
-          if (synth == null || recv == null) {
-            result.error("NOT_INITIALIZED", "Synthesizer is not initialized", null)
-            return
-          }
-          msg.setMessage(ShortMessage.NOTE_ON, channel, note, velocity)
-          recv?.send(msg, -1)
+          msg.setMessage(ShortMessage.NOTE_ON, 0, note, velocity)
+          recv.send(msg, -1)
           result.success("MIDI note played successfully")
         } catch (e: InvalidMidiDataException) {
           e.printStackTrace()
@@ -107,17 +79,14 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
       }
       "stopMidiNote" -> {
+        if (sf == null) {
+          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
+        }
         val note = arguments!!["note"] as Int
         val velocity = arguments["velocity"] as Int
-        val channel = arguments["channel"] as Int
-
         try {
-          if (synth == null || recv == null) {
-            result.error("NOT_INITIALIZED", "Synthesizer is not initialized", null)
-            return
-          }
-          msg.setMessage(ShortMessage.NOTE_OFF, channel, note, velocity)
-          recv?.send(msg, -1)
+          msg.setMessage(ShortMessage.NOTE_OFF, 0, note, velocity)
+          recv.send(msg, -1)
             result.success("MIDI note stopped successfully")
         } catch (e: InvalidMidiDataException) {
           e.printStackTrace()
@@ -125,14 +94,11 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
       }
       "dispose" -> {
-        synth?.close()
-        synth = null
-        recv = null
-        isInitialized = false
-        isDisposed = true
+        synth.close()
         result.success("Synthesizer disposed")
       }
       else -> result.notImplemented()
+    }
     }
   }
 

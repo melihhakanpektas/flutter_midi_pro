@@ -14,8 +14,13 @@ class _MainPageState extends State<MainPage> {
   final _midi = MidiPro();
   final instrumentIndex = ValueNotifier<int>(0);
   final volume = ValueNotifier<int>(127);
-  Future load(int instrumentIndex) async {
-    await _midi.loadInstrument(sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex);
+  Future loadSoundfont() async {
+    await _midi.loadSoundfont(
+        sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex.value);
+  }
+
+  Future loadInstrument() async {
+    await _midi.loadInstrument(instrumentIndex: instrumentIndex.value);
   }
 
   Map<int, NoteModel> pointerAndNote = {};
@@ -72,14 +77,25 @@ class _MainPageState extends State<MainPage> {
           const SizedBox(
             height: 10,
           ),
+          ElevatedButton(
+              onPressed: () {
+                loadSoundfont();
+              },
+              child: const Text(
+                'Load Soundfont file\nMust be called before other methods',
+                textAlign: TextAlign.center,
+              )),
+          const SizedBox(
+            height: 10,
+          ),
           ValueListenableBuilder(
               valueListenable: instrumentIndex,
               builder: (context, instrumentIndexValue, child) {
                 return ElevatedButton(
                     onPressed: () {
-                      load(instrumentIndexValue);
+                      loadInstrument();
                     },
-                    child: Text('Load Instrument $instrumentIndexValue in TimGM6mb.sf2'));
+                    child: Text('Load Instrument $instrumentIndexValue'));
               }),
           Padding(
               padding: const EdgeInsets.all(18),

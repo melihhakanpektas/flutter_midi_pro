@@ -17,3 +17,8 @@
 ## 1.0.6
 
 - Instance error fixed.
+
+## 1.1.0
+
+- Added instrument channel support for android.
+-
