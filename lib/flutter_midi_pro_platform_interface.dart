@@ -24,7 +24,11 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  Future<Object?> loadInstrument({required Uint8List sf2Data, required int instrumentIndex}) async {
+  Future<Object?> loadSoundfont({required Uint8List sf2Data, required int instrumentIndex}) async {
+    throw UnimplementedError('loadSoundfont() has not been implemented.');
+  }
+
+  Future<Object?> loadInstrument({required int instrumentIndex}) async {
     throw UnimplementedError('loadInstrument() has not been implemented.');
   }
 

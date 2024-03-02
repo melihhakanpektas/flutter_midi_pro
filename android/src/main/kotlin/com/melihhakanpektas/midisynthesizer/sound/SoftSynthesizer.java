@@ -1071,7 +1071,7 @@ public final class SoftSynthesizer implements AudioSynthesizer,
                 if (!line.isActive())
                     line.start();
 
-                int controlbuffersize = 64;
+                int controlbuffersize = 8;
                 try {
                     controlbuffersize = ais.available();
                 } catch (IOException ignored) {
