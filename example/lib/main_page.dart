@@ -11,11 +11,12 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  final midiPro = MidiPro();
+  late MidiPro midiPro;
   ValueNotifier<bool> isMidiInitialized = ValueNotifier<bool>(false);
   final instrumentIndex = ValueNotifier<int>(0);
   final volume = ValueNotifier<int>(127);
   Future loadSoundfont() async {
+    midiPro = MidiPro();
     await midiPro
         .loadSoundfont(sf2Path: 'assets/TimGM6mb.sf2', instrumentIndex: instrumentIndex.value)
         .then((value) => isMidiInitialized.value = true);
@@ -145,6 +146,18 @@ class _MainPageState extends State<MainPage> {
                                 ],
                               );
                             })),
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: ElevatedButton(
+                        onPressed: !isMidiInitializedValue
+                            ? null
+                            : () {
+                                midiPro.dispose();
+                                isMidiInitialized.value = false;
+                              },
+                        child: const Text('Dispose'),
+                      ),
+                    ),
                     Stack(
                       children: [
                         PianoPro(

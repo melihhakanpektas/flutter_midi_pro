@@ -30,7 +30,6 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     val arguments = call.arguments as? Map<*, *> ?
 
-    CoroutineScope(Dispatchers.IO).launch {
     when (call.method) {
       "loadSoundfont" -> {
         val data = arguments!!["sf2Data"] as ByteArray
@@ -113,7 +112,6 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         result.success("Synthesizer disposed")
       }
       else -> result.notImplemented()
-    }
     }
   }
 
