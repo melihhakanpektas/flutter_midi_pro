@@ -15,105 +15,103 @@ import java.io.IOException
 
 /** FlutterMidiProPlugin */
 class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
+  companion object {
+    init {
+      System.loadLibrary("native-lib")
+    }
+    @JvmStatic
+    private external fun fluidsynthInit()
+
+    @JvmStatic
+    private external fun loadSoundfont(path: String): Int
+
+    @JvmStatic
+    private external fun selectInstrument(sfId: Int, bank: Int, program: Int)
+
+    @JvmStatic
+    private external fun playNote(channel: Int, key: Int, velocity: Int)
+
+    @JvmStatic
+    private external fun stopNote(channel: Int, key: Int)
+
+    @JvmStatic
+    private external fun unloadSoundfont(sfId: Int)
+    @JvmStatic
+    private external fun dispose()
+  }
+
   private lateinit var channel : MethodChannel
-  private var synth: SoftSynthesizer? = null
-  private var recv: Receiver? = null
-  private val msg = ShortMessage()
-  private var sf: SF2Soundbank? = null
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
   }
-
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     val arguments = call.arguments as? Map<*, *> ?
-
     when (call.method) {
+      "init" -> {
+        fluidsynthInit()
+        result.success(null)
+      }
       "loadSoundfont" -> {
-        // Initialize a new SoftSynthesizer and Receiver here
-        synth = SoftSynthesizer()
-        recv = synth?.receiver
-        val data = arguments!!["sf2Data"] as ByteArray
-        val instrumentIndex = arguments["instrumentIndex"] as Int
-        try {
-          val file = File.createTempFile("temp", ".sf2")
-          file.writeBytes(data)
-          sf = SF2Soundbank(file)
-          synth!!.open()
-          synth!!.loadAllInstruments(sf!!)
-          synth!!.channels[0].programChange(instrumentIndex)
-          result.success("Soundfont loaded successfully")
-        } catch (e: IOException) {
-          result.error("LOAD_ERROR", "Failed to load soundfont: ${e.message}", null)
-        } catch (e: MidiUnavailableException) {
-          result.error("LOAD_ERROR", "Failed to open synthesizer: ${e.message}", null)
+        println("loadSoundfont called")
+        val path = arguments?.get("path") as? String
+        if (path != null) {
+          val sfId = loadSoundfont(path)
+          result.success(sfId)
+        } else {
+          result.error("INVALID_ARGUMENT", "Path is required", null)
         }
       }
-      "loadInstrument" -> {
-        val instrumentIndex = arguments!!["instrumentIndex"] as Int
-        if (sf == null) {
-          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
-        }
-        try {
-          synth!!.channels[0].programChange(instrumentIndex)
-          result.success("Soundfont loaded successfully")
-        } catch (e: IOException) {
-          result.error("LOAD_ERROR", "Failed to load instrument: ${e.message}", null)
-        } catch (e: MidiUnavailableException) {
-          result.error("LOAD_ERROR", "Failed to open synthesizer: ${e.message}", null)
+      "selectInstrument" -> {
+        println("selectInstrument called")
+        val sfId = arguments?.get("sfId") as? Int
+        val bank = arguments?.get("bank") as? Int
+        val program = call.argument<Int>("program")
+        if (sfId != null && bank != null && program != null) {
+          selectInstrument(sfId, bank, program)
+          result.success(null)
+        } else {
+          result.error("INVALID_ARGUMENT", "sfId, bank, and program are required", null)
         }
       }
-      "playMidiNote" -> {
-        if (sf == null) {
-          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
-        }
-        val note = arguments!!["note"] as Int
-        val velocity = arguments["velocity"] as Int
-        try {
-          msg.setMessage(ShortMessage.NOTE_ON, 0, note, velocity)
-          recv!!.send(msg, -1)
-          result.success("MIDI note played successfully")
-        } catch (e: InvalidMidiDataException) {
-          e.printStackTrace()
-          result.error("PLAY_ERROR", "Failed to play MIDI note: ${e.message}", null)
+      "playNote" -> {
+        println("playNote called")
+        val channel = call.argument<Int>("channel")
+        val key = call.argument<Int>("key")
+        val velocity = call.argument<Int>("velocity")
+        if (channel != null && key != null && velocity != null) {
+          playNote(channel, key, velocity)
+          result.success(null)
+        } else {
+          result.error("INVALID_ARGUMENT", "channel, key, and velocity are required", null)
         }
       }
-      "stopMidiNote" -> {
-        if (sf == null) {
-          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
-        }
-        val note = arguments!!["note"] as Int
-        val velocity = arguments["velocity"] as Int
-        try {
-          msg.setMessage(ShortMessage.NOTE_OFF, 0, note, velocity)
-          recv!!.send(msg, -1)
-            result.success("MIDI note stopped successfully")
-        } catch (e: InvalidMidiDataException) {
-          e.printStackTrace()
-          result.error("STOP_ERROR", "Failed to stop MIDI note: ${e.message}", null)
+      "stopNote" -> {
+        println("stopNote called")
+        val channel = call.argument<Int>("channel")
+        val key = call.argument<Int>("key")
+        if (channel != null && key != null) {
+          stopNote(channel, key)
+          result.success(null)
+        } else {
+          result.error("INVALID_ARGUMENT", "channel and key are required", null)
         }
       }
-      "stopAllMidiNotes" -> {
-        if (sf == null) {
-          result.error("NOT_INITIALIZED", "Soundfont is not loaded", null)
-        }
-        try {
-          for (i in 0..127) {
-            msg.setMessage(ShortMessage.NOTE_OFF, 0, i, 0)
-            recv!!.send(msg, -1)
-          }
-          result.success("All MIDI notes stopped successfully")
-        } catch (e: InvalidMidiDataException) {
-          e.printStackTrace()
-          result.error("STOP_ERROR", "Failed to stop all MIDI notes: ${e.message}", null)
+      "unloadSoundfont" -> {
+        println("unloadSoundfont called")
+        val sfId = call.argument<Int>("sfId")
+        if (sfId != null) {
+          unloadSoundfont(sfId)
+          result.success(null)
+        } else {
+          result.error("INVALID_ARGUMENT", "sfId is required", null)
         }
       }
       "dispose" -> {
-        synth?.close()
-        synth = null
-        recv = null
-        result.success("Synthesizer disposed")
+        println("dispose called")
+        dispose()
+        result.success(null)
       }
       else -> result.notImplemented()
     }
