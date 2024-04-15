@@ -38,13 +38,13 @@ extern "C" {
  *     {
  *       fluid_settings_t *settings;
  *       fluid_synth_t *synth;
- *       fluid_audio_driver_t *adriver;
+ *       fluid_audio_driver_t *driver;
  *
  *       settings = new_fluid_settings ();
  *       fluid_settings_setstr(settings, "audio.driver", "alsa");
  *       // ... change settings ...
  *       synth = new_fluid_synth (settings);
- *       adriver = new_fluid_audio_driver (settings, synth);
+ *       driver = new_fluid_audio_driver (settings, synth);
  *       // ...
  *     }
  * @endcode

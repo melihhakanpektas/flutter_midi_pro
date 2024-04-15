@@ -12,15 +12,11 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  Future<void> init() {
-    throw UnimplementedError('init() has not been implemented.');
-  }
-
-  Future<int> loadSoundfont(String path) {
+  Future<int> loadSoundfont(String path, {bool? resetPresets}) {
     throw UnimplementedError('loadSoundfont() has not been implemented.');
   }
 
-  Future<void> selectInstrument(int sfId, int bank, int program) {
+  Future<void> selectInstrument(int sfId, int channel, int bank, int program) {
     throw UnimplementedError('selectInstrument() has not been implemented.');
   }
 
@@ -32,7 +28,7 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('stopNote() has not been implemented.');
   }
 
-  Future<void> unloadSoundfont(int sfId) {
+  Future<void> unloadSoundfont(int sfId, {bool? resetPresets}) {
     throw UnimplementedError('unloadSoundfont() has not been implemented.');
   }
 

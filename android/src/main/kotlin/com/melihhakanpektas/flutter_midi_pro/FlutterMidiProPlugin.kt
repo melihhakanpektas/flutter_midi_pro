@@ -1,17 +1,9 @@
 package com.melihhakanpektas.flutter_midi_pro
 
-import com.melihhakanpektas.midisynthesizer.sound.SF2Soundbank
-import com.melihhakanpektas.midisynthesizer.sound.SoftSynthesizer
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
-import com.melihhakanpektas.midisynthesizer.midi.InvalidMidiDataException
-import com.melihhakanpektas.midisynthesizer.midi.MidiUnavailableException
-import com.melihhakanpektas.midisynthesizer.midi.Receiver
-import com.melihhakanpektas.midisynthesizer.midi.ShortMessage
-import java.io.File
-import java.io.IOException
 
 /** FlutterMidiProPlugin */
 class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
@@ -23,10 +15,10 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     private external fun fluidsynthInit()
 
     @JvmStatic
-    private external fun loadSoundfont(path: String): Int
+    private external fun loadSoundfont(path: String, resetPresets: Boolean): Int
 
     @JvmStatic
-    private external fun selectInstrument(sfId: Int, bank: Int, program: Int)
+    private external fun selectInstrument(sfId: Int, channel:Int, bank: Int, program: Int)
 
     @JvmStatic
     private external fun playNote(channel: Int, key: Int, velocity: Int)
@@ -35,7 +27,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     private external fun stopNote(channel: Int, key: Int)
 
     @JvmStatic
-    private external fun unloadSoundfont(sfId: Int)
+    private external fun unloadSoundfont(sfId: Int, resetPresets: Boolean = false)
     @JvmStatic
     private external fun dispose()
   }
@@ -45,38 +37,33 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
+    fluidsynthInit()
   }
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
-    val arguments = call.arguments as? Map<*, *> ?
     when (call.method) {
-      "init" -> {
-        fluidsynthInit()
-        result.success(null)
-      }
       "loadSoundfont" -> {
-        println("loadSoundfont called")
-        val path = arguments?.get("path") as? String
+        val path = call.argument<Int>("path") as? String?
+        val resetPresets = call.argument<Boolean>("resetPresets") ?: false
         if (path != null) {
-          val sfId = loadSoundfont(path)
-          result.success(sfId)
+          val sfId = loadSoundfont(path, resetPresets)
+          if (sfId == -1) {
+            result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
+          } else {
+            result.success(sfId)
+          }
         } else {
-          result.error("INVALID_ARGUMENT", "Path is required", null)
+            result.error("INVALID_ARGUMENT", "Path is required", null)
         }
       }
       "selectInstrument" -> {
-        println("selectInstrument called")
-        val sfId = arguments?.get("sfId") as? Int
-        val bank = arguments?.get("bank") as? Int
-        val program = call.argument<Int>("program")
-        if (sfId != null && bank != null && program != null) {
-          selectInstrument(sfId, bank, program)
+        val sfId = call.argument<Int>("sfId")?:0
+        val channel = call.argument<Int>("channel")?:0
+        val bank = call.argument<Int>("bank")?:0
+        val program = call.argument<Int>("program")?:0
+          selectInstrument(sfId, channel, bank, program)
           result.success(null)
-        } else {
-          result.error("INVALID_ARGUMENT", "sfId, bank, and program are required", null)
         }
-      }
       "playNote" -> {
-        println("playNote called")
         val channel = call.argument<Int>("channel")
         val key = call.argument<Int>("key")
         val velocity = call.argument<Int>("velocity")
@@ -88,7 +75,6 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
       }
       "stopNote" -> {
-        println("stopNote called")
         val channel = call.argument<Int>("channel")
         val key = call.argument<Int>("key")
         if (channel != null && key != null) {
@@ -99,17 +85,16 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
       }
       "unloadSoundfont" -> {
-        println("unloadSoundfont called")
         val sfId = call.argument<Int>("sfId")
+        val resetPresets = call.argument<Boolean>("resetPresets") ?: false
         if (sfId != null) {
-          unloadSoundfont(sfId)
+          unloadSoundfont(sfId, resetPresets)
           result.success(null)
         } else {
           result.error("INVALID_ARGUMENT", "sfId is required", null)
         }
       }
       "dispose" -> {
-        println("dispose called")
         dispose()
         result.success(null)
       }
