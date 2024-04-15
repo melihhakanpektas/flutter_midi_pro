@@ -21,6 +21,7 @@ class _MainPageState extends State<MainPage> {
   Map<int, NoteModel> pointerAndNote = {};
 
   /// Loads a soundfont file from the specified path.
+  /// Returns the soundfont ID.
   Future<int> loadSoundfont(String path) async {
     if (loadedSoundfonts.containsValue(path)) {
       return loadedSoundfonts.entries.firstWhere((element) => element.value == path).key;
