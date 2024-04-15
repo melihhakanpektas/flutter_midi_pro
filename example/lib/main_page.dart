@@ -27,6 +27,7 @@ class _MainPageState extends State<MainPage> {
     }
     final int sfId = await midiPro.loadSoundfont(path);
     loadedSoundfonts[sfId] = path;
+    isInstrumentLoaded.value = true;
     return sfId;
   }
 
@@ -64,16 +65,11 @@ class _MainPageState extends State<MainPage> {
     await midiPro.stopAllNotes(channel: channel);
   }
 
-  /// Disposes the midi player.
-  Future<void> disposeMidi() async {
-    await midiPro.dispose();
-    isInstrumentLoaded.value = false;
-  }
-
   /// Unloads a soundfont file.
   Future<void> unloadSoundfont(int sfId) async {
     await midiPro.unloadSoundfont(sfId);
     loadedSoundfonts.remove(sfId);
+    isInstrumentLoaded.value = false;
   }
 
   @override
@@ -93,15 +89,7 @@ class _MainPageState extends State<MainPage> {
               height: 10,
             ),
             ElevatedButton(
-                onPressed: () {
-                  midiPro
-                      .loadSoundfont(
-                    'assets/TimGM6mb.sf2',
-                  )
-                      .then((value) {
-                    isInstrumentLoaded.value = true;
-                  });
-                },
+                onPressed: () => loadSoundfont('assets/TimGM6mb.sf2'),
                 child: const Text(
                   'Load Soundfont file\nMust be called before other methods',
                   textAlign: TextAlign.center,
@@ -114,49 +102,109 @@ class _MainPageState extends State<MainPage> {
                 builder: (context, isMidiInitializedValue, child) {
                   return Column(
                     children: [
-                      ValueListenableBuilder(
-                          valueListenable: instrumentIndex,
-                          builder: (context, channelValue, child) {
-                            return DropdownButton<int>(
-                                value: channelValue,
-                                items: [
-                                  for (int i = 0; i < 128; i++)
-                                    DropdownMenuItem<int>(
-                                      value: i,
-                                      child: Text('Instrument $i'),
-                                    )
-                                ],
-                                onChanged: (int? value) {
-                                  if (value != null) {
-                                    instrumentIndex.value = value;
-                                  }
-                                });
-                          }),
-                      ValueListenableBuilder(
-                          valueListenable: instrumentIndex,
-                          builder: (context, instrumentIndexValue, child) {
-                            return ElevatedButton(
-                                onPressed: isMidiInitializedValue
-                                    ? () {
-                                        midiPro.selectInstrument(
-                                            sfId: 1,
-                                            channel: 0,
-                                            bank: 0,
-                                            program: instrumentIndexValue);
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          ValueListenableBuilder(
+                              valueListenable: bankIndex,
+                              builder: (context, bankIndexValue, child) {
+                                return DropdownButton<int>(
+                                    value: bankIndexValue,
+                                    items: [
+                                      for (int i = 0; i < 128; i++)
+                                        DropdownMenuItem<int>(
+                                          value: i,
+                                          child: Text(
+                                            'Bank $i',
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        )
+                                    ],
+                                    onChanged: (int? value) {
+                                      if (value != null) {
+                                        bankIndex.value = value;
                                       }
-                                    : null,
-                                child: Text('Load Instrument $instrumentIndexValue'));
+                                    });
+                              }),
+                          ValueListenableBuilder(
+                              valueListenable: instrumentIndex,
+                              builder: (context, channelValue, child) {
+                                return DropdownButton<int>(
+                                    value: channelValue,
+                                    items: [
+                                      for (int i = 0; i < 128; i++)
+                                        DropdownMenuItem<int>(
+                                          value: i,
+                                          child: Text(
+                                            'Instrument $i',
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        )
+                                    ],
+                                    onChanged: (int? value) {
+                                      if (value != null) {
+                                        instrumentIndex.value = value;
+                                      }
+                                    });
+                              }),
+                          ValueListenableBuilder(
+                              valueListenable: channelIndex,
+                              builder: (context, channelIndexValue, child) {
+                                return DropdownButton<int>(
+                                    value: channelIndexValue,
+                                    items: [
+                                      for (int i = 0; i < 16; i++)
+                                        DropdownMenuItem<int>(
+                                          value: i,
+                                          child: Text(
+                                            'Channel $i',
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        )
+                                    ],
+                                    onChanged: (int? value) {
+                                      if (value != null) {
+                                        channelIndex.value = value;
+                                      }
+                                    });
+                              }),
+                        ],
+                      ),
+                      ValueListenableBuilder(
+                          valueListenable: bankIndex,
+                          builder: (context, bankIndexValue, child) {
+                            return ValueListenableBuilder(
+                                valueListenable: channelIndex,
+                                builder: (context, channelIndexValue, child) {
+                                  return ValueListenableBuilder(
+                                      valueListenable: instrumentIndex,
+                                      builder: (context, instrumentIndexValue, child) {
+                                        return ElevatedButton(
+                                            onPressed: isMidiInitializedValue
+                                                ? () => selectInstrument(
+                                                      sfId: loadedSoundfonts.keys.first,
+                                                      program: instrumentIndexValue,
+                                                      bank: bankIndexValue,
+                                                      channel: channelIndexValue,
+                                                    )
+                                                : null,
+                                            child: Text(
+                                                'Load Instrument $instrumentIndexValue on Bank $bankIndexValue to Channel $channelIndexValue'));
+                                      });
+                                });
                           }),
                       const SizedBox(
                         height: 10,
                       ),
-                      ElevatedButton(
-                          onPressed: isMidiInitializedValue
-                              ? () {
-                                  midiPro.stopAllNotes(channel: 0);
-                                }
-                              : null,
-                          child: const Text('Stop All Notes')),
+                      ValueListenableBuilder(
+                          valueListenable: channelIndex,
+                          builder: (context, channelIndexValue, child) {
+                            return ElevatedButton(
+                                onPressed: isMidiInitializedValue
+                                    ? () => stopAllNotes(channel: channelIndexValue)
+                                    : null,
+                                child: Text('Stop All Notes on Channel $channelIndexValue'));
+                          }),
                       Padding(
                           padding: const EdgeInsets.all(18),
                           child: ValueListenableBuilder(
@@ -172,9 +220,7 @@ class _MainPageState extends State<MainPage> {
                                       min: 0,
                                       max: 127,
                                       onChanged: isMidiInitializedValue
-                                          ? (value) {
-                                              volume.value = value.toInt();
-                                            }
+                                          ? (value) => volume.value = value.toInt()
                                           : null,
                                     )),
                                     const SizedBox(
@@ -189,11 +235,8 @@ class _MainPageState extends State<MainPage> {
                         child: ElevatedButton(
                           onPressed: !isMidiInitializedValue
                               ? null
-                              : () {
-                                  midiPro.dispose();
-                                  isInstrumentLoaded.value = false;
-                                },
-                          child: const Text('Dispose'),
+                              : () => unloadSoundfont(loadedSoundfonts.keys.first),
+                          child: const Text('Unload Soundfont file'),
                         ),
                       ),
                       Stack(
@@ -204,7 +247,9 @@ class _MainPageState extends State<MainPage> {
                               if (note == null) return;
                               pointerAndNote[tapId] = note;
                               midiPro.playNote(
-                                  channel: 0, key: note.midiNoteNumber, velocity: volume.value);
+                                  channel: channelIndex.value,
+                                  key: note.midiNoteNumber,
+                                  velocity: volume.value);
                               debugPrint(
                                   'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
                             },
@@ -212,10 +257,12 @@ class _MainPageState extends State<MainPage> {
                               if (note == null) return;
                               if (pointerAndNote[tapId] == note) return;
                               // midiPro.stopNote(
-                              //     channel: 0, key: pointerAndNote[tapId]!.midiNoteNumber);
+                              //     channel: channelIndex.value, key: pointerAndNote[tapId]!.midiNoteNumber);
                               pointerAndNote[tapId] = note;
                               midiPro.playNote(
-                                  channel: 0, key: note.midiNoteNumber, velocity: volume.value);
+                                  channel: channelIndex.value,
+                                  key: note.midiNoteNumber,
+                                  velocity: volume.value);
                               debugPrint(
                                   'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
                             },
