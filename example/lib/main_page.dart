@@ -20,6 +20,14 @@ class _MainPageState extends State<MainPage> {
   final volume = ValueNotifier<int>(127);
   Map<int, NoteModel> pointerAndNote = {};
 
+  @override
+  void initState() {
+    midiPro.init().catchError((e) {
+      debugPrint(e.toString());
+    });
+    super.initState();
+  }
+
   /// Loads a soundfont file from the specified path.
   /// Returns the soundfont ID.
   Future<int> loadSoundfont(String path) async {
@@ -39,7 +47,11 @@ class _MainPageState extends State<MainPage> {
     int channel = 0,
     int bank = 0,
   }) async {
-    await midiPro.selectInstrument(sfId: sfId, channel: channel, bank: bank, program: program);
+    int? sfIdValue = sfId;
+    if (!loadedSoundfonts.containsKey(sfId)) {
+      sfIdValue = loadedSoundfonts.keys.first;
+    }
+    await midiPro.selectInstrument(sfId: sfIdValue, channel: channel, bank: bank, program: program);
   }
 
   /// Plays a note on the specified channel.
@@ -47,23 +59,26 @@ class _MainPageState extends State<MainPage> {
     required int key,
     required int velocity,
     int channel = 0,
+    int sfId = 1,
   }) async {
-    await midiPro.playNote(channel: channel, key: key, velocity: velocity);
+    int? sfIdValue = sfId;
+    if (!loadedSoundfonts.containsKey(sfId)) {
+      sfIdValue = loadedSoundfonts.keys.first;
+    }
+    await midiPro.playNote(channel: channel, key: key, velocity: velocity, sfId: sfIdValue);
   }
 
   /// Stops a note on the specified channel.
   Future<void> stopNote({
     required int key,
     int channel = 0,
+    int sfId = 1,
   }) async {
-    await midiPro.stopNote(channel: channel, key: key);
-  }
-
-  /// Stops all notes on the specified channel.
-  Future<void> stopAllNotes({
-    int channel = 0,
-  }) async {
-    await midiPro.stopAllNotes(channel: channel);
+    int? sfIdValue = sfId;
+    if (!loadedSoundfonts.containsKey(sfId)) {
+      sfIdValue = loadedSoundfonts.keys.first;
+    }
+    await midiPro.stopNote(channel: channel, key: key, sfId: sfIdValue);
   }
 
   /// Unloads a soundfont file.
@@ -194,18 +209,6 @@ class _MainPageState extends State<MainPage> {
                                       });
                                 });
                           }),
-                      const SizedBox(
-                        height: 10,
-                      ),
-                      ValueListenableBuilder(
-                          valueListenable: channelIndex,
-                          builder: (context, channelIndexValue, child) {
-                            return ElevatedButton(
-                                onPressed: isMidiInitializedValue
-                                    ? () => stopAllNotes(channel: channelIndexValue)
-                                    : null,
-                                child: Text('Stop All Notes on Channel $channelIndexValue'));
-                          }),
                       Padding(
                           padding: const EdgeInsets.all(18),
                           child: ValueListenableBuilder(
@@ -247,20 +250,21 @@ class _MainPageState extends State<MainPage> {
                             onTapDown: (NoteModel? note, int tapId) {
                               if (note == null) return;
                               pointerAndNote[tapId] = note;
-                              midiPro.playNote(
-                                  channel: channelIndex.value,
+                              playNote(
                                   key: note.midiNoteNumber,
-                                  velocity: volume.value);
+                                  velocity: volume.value,
+                                  channel: channelIndex.value);
                               debugPrint(
                                   'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
                             },
                             onTapUpdate: (NoteModel? note, int tapId) {
                               if (note == null) return;
                               if (pointerAndNote[tapId] == note) return;
-                              // midiPro.stopNote(
-                              //     channel: channelIndex.value, key: pointerAndNote[tapId]!.midiNoteNumber);
+                              stopNote(
+                                  key: pointerAndNote[tapId]!.midiNoteNumber,
+                                  channel: channelIndex.value);
                               pointerAndNote[tapId] = note;
-                              midiPro.playNote(
+                              playNote(
                                   channel: channelIndex.value,
                                   key: note.midiNoteNumber,
                                   velocity: volume.value);
@@ -268,8 +272,9 @@ class _MainPageState extends State<MainPage> {
                                   'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
                             },
                             onTapUp: (int tapId) {
-                              // midiPro.stopNote(
-                              //     channel: 0, key: pointerAndNote[tapId]!.midiNoteNumber);
+                              stopNote(
+                                  key: pointerAndNote[tapId]!.midiNoteNumber,
+                                  channel: channelIndex.value);
                               pointerAndNote.remove(tapId);
                               debugPrint('UP: tapId= $tapId');
                             },

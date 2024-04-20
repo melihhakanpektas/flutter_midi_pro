@@ -37,10 +37,13 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
-    fluidsynthInit()
   }
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
+      "init" -> {
+        fluidsynthInit()
+        result.success(null)
+      }
       "loadSoundfont" -> {
         val path = call.argument<Int>("path") as? String?
         val resetPresets = call.argument<Boolean>("resetPresets") ?: false
@@ -56,7 +59,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
       }
       "selectInstrument" -> {
-        val sfId = call.argument<Int>("sfId")?:0
+        val sfId = call.argument<Int>("sfId")?:1
         val channel = call.argument<Int>("channel")?:0
         val bank = call.argument<Int>("bank")?:0
         val program = call.argument<Int>("program")?:0

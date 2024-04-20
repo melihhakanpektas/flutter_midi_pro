@@ -18,9 +18,15 @@ import 'package:path_provider/path_provider.dart';
 class MidiPro {
   MidiPro();
 
+  /// Initializes the FlutterMidiPro instance.
+  /// This must be called before using any other methods.
+  Future<void> init() async {
+    return FlutterMidiProPlatform.instance.init();
+  }
+
   /// Loads a soundfont file from the specified path.
-  /// Returns the soundfont ID.
-  Future<int> loadSoundfont(String path, {bool? resetPresets}) async {
+  /// Returns the sfId (SoundfontSamplerId).
+  Future<int> loadSoundfont(String path) async {
     final tempDir = await getTemporaryDirectory();
     final tempFile = File('${tempDir.path}/${path.split('/').last}');
     if (!tempFile.existsSync()) {
@@ -29,7 +35,7 @@ class MidiPro {
       await tempFile
           .writeAsBytes(buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
     }
-    return FlutterMidiProPlatform.instance.loadSoundfont(tempFile.path, resetPresets: resetPresets);
+    return FlutterMidiProPlatform.instance.loadSoundfont(tempFile.path);
   }
 
   /// Selects an instrument on the specified soundfont.
@@ -73,8 +79,11 @@ class MidiPro {
 
     /// The velocity of the note. This is a number from 0 to 127.
     required int velocity,
+
+    /// The soundfont ID. First soundfont loaded is 1.
+    required int sfId,
   }) async {
-    return FlutterMidiProPlatform.instance.playNote(channel, key, velocity);
+    return FlutterMidiProPlatform.instance.playNote(channel, key, velocity, sfId);
   }
 
   /// Stops a note on the specified channel.
@@ -89,15 +98,18 @@ class MidiPro {
 
     /// The MIDI note number. This is a number from 0 to 127.
     required int key,
+
+    /// The soundfont ID. First soundfont loaded is 1.
+    required int sfId,
   }) async {
-    return FlutterMidiProPlatform.instance.stopNote(channel, key);
+    return FlutterMidiProPlatform.instance.stopNote(channel, key, sfId);
   }
 
   /// Unloads a soundfont from memory.
   /// The soundfont ID is the ID returned by the [loadSoundfont] method.
   /// If resetPresets is true, the presets will be reset to the default values.
-  Future<void> unloadSoundfont(int sfId, {bool? resetPresets}) async {
-    return FlutterMidiProPlatform.instance.unloadSoundfont(sfId, resetPresets: resetPresets);
+  Future<void> unloadSoundfont(int sfId) async {
+    return FlutterMidiProPlatform.instance.unloadSoundfont(sfId);
   }
 
   /// Disposes of the FlutterMidiPro instance.
@@ -108,20 +120,5 @@ class MidiPro {
   ///
   Future<void> dispose() async {
     return FlutterMidiProPlatform.instance.dispose();
-  }
-
-  /// Stops all notes on the specified channel.
-  /// The channel is a number from 0 to 15.
-  /// All notes on the channel will stop playing.
-  Future<void> stopAllNotes({
-    /// The MIDI channel. This is a number from 0 to 15. Channel numbers start at 0.
-    required int channel,
-  }) async {
-    for (int i = 0; i < 128; i++) {
-      await stopNote(
-        channel: channel,
-        key: i,
-      );
-    }
   }
 }
