@@ -15,8 +15,9 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
-  Future<int> loadSoundfont(String path) async {
-    final int sfId = await _channel.invokeMethod('loadSoundfont', {'path': path});
+  Future<int> loadSoundfont(String path, int bank, int program) async {
+    final int sfId = await _channel
+        .invokeMethod('loadSoundfont', {'path': path, 'bank': bank, 'program': program});
     return sfId;
   }
 

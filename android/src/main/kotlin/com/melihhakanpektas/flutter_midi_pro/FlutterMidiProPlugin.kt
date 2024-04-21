@@ -12,9 +12,6 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       System.loadLibrary("native-lib")
     }
     @JvmStatic
-    private external fun fluidsynthInit()
-
-    @JvmStatic
     private external fun loadSoundfont(path: String): Int
 
     @JvmStatic
@@ -40,22 +37,14 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   }
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
-      "init" -> {
-        fluidsynthInit()
-        result.success(null)
-      }
       "loadSoundfont" -> {
-        val path = call.argument<Int>("path") as? String?
-        if (path != null) {
-          val sfId = loadSoundfont(path)
+        val path = call.argument<String>("path") as String
+        val sfId = loadSoundfont(path)
           if (sfId == -1) {
             result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
           } else {
             result.success(sfId)
           }
-        } else {
-            result.error("INVALID_ARGUMENT", "Path is required", null)
-        }
       }
       "selectInstrument" -> {
         val sfId = call.argument<Int>("sfId")?:1

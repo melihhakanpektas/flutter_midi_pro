@@ -27,7 +27,7 @@ class MidiPro {
 
   /// Loads a soundfont file from the specified path.
   /// Returns the sfId (SoundfontSamplerId).
-  Future<int> loadSoundfont(String path) async {
+  Future<int> loadSoundfont(String path, int bank, int program) async {
     final tempDir = await getTemporaryDirectory();
     final tempFile = File('${tempDir.path}/${path.split('/').last}');
     if (!tempFile.existsSync()) {
@@ -36,7 +36,7 @@ class MidiPro {
       await tempFile
           .writeAsBytes(buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
     }
-    return _platformInstance.loadSoundfont(tempFile.path);
+    return _platformInstance.loadSoundfont(tempFile.path, bank, program);
   }
 
   /// Selects an instrument on the specified soundfont.

@@ -14,7 +14,7 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('init() has not been implemented.');
   }
 
-  Future<int> loadSoundfont(String path) {
+  Future<int> loadSoundfont(String path, int bank, int program) {
     throw UnimplementedError('loadSoundfont() has not been implemented.');
   }
 
