@@ -1,43 +1,43 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 
 /// An implementation of [FlutterMidiProPlatform] that uses method channels.
 class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
-  /// The method channel used to interact with the native platform.
-  @visibleForTesting
-  MethodChannel methodChannel = const MethodChannel('flutter_midi_pro');
+  static const MethodChannel _channel = MethodChannel('flutter_midi_pro');
 
   @override
-  Future<Object?> loadSoundfont({required Uint8List sf2Data, required int instrumentIndex}) async {
-    return methodChannel
-        .invokeMethod('loadSoundfont', {'sf2Data': sf2Data, 'instrumentIndex': instrumentIndex});
+  Future<int> loadSoundfont(String path, int bank, int program) async {
+    final int sfId = await _channel
+        .invokeMethod('loadSoundfont', {'path': path, 'bank': bank, 'program': program});
+    return sfId;
   }
 
   @override
-  Future<Object?> loadInstrument({required int instrumentIndex}) async {
-    return methodChannel.invokeMethod('loadInstrument', {'instrumentIndex': instrumentIndex});
+  Future<void> selectInstrument(int sfId, int channel, int bank, int program) async {
+    await _channel.invokeMethod(
+        'selectInstrument', {'sfId': sfId, 'channel': channel, 'bank': bank, 'program': program});
   }
 
   @override
-  Future<Object?> playMidiNote({required int midi, required int velocity}) async {
-    return methodChannel.invokeMethod('playMidiNote', {'note': midi, 'velocity': velocity});
+  Future<void> playNote(int channel, int key, int velocity, int sfId) async {
+    await _channel.invokeMethod(
+        'playNote', {'channel': channel, 'key': key, 'velocity': velocity, 'sfId': sfId});
   }
 
   @override
-  Future<Object?> stopMidiNote({required int midi, required int velocity}) async {
-    return methodChannel.invokeMethod('stopMidiNote', {'note': midi, 'velocity': velocity});
+  Future<void> stopNote(int channel, int key, int sfId) async {
+    await _channel.invokeMethod('stopNote', {'channel': channel, 'key': key, 'sfId': sfId});
   }
 
   @override
-  Future<Object?> stopAllMidiNotes() async {
-    return methodChannel.invokeMethod('stopAllMidiNotes');
+  Future<void> unloadSoundfont(int sfId) async {
+    await _channel.invokeMethod('unloadSoundfont', {'sfId': sfId});
   }
 
   @override
-  Future<Object?> dispose() async {
-    return methodChannel.invokeMethod('dispose');
+  Future<void> dispose() async {
+    await _channel.invokeMethod('dispose');
   }
 }
