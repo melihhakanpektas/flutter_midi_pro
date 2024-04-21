@@ -9,17 +9,15 @@ std::map<int, fluid_audio_driver_t*> drivers = {};
 std::map<int, int> soundfonts = {};
 int nextSfId = 1;
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_fluidsynthInit(JNIEnv* env,jclass clazz) {
-}
-
 extern "C" JNIEXPORT int JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_loadSoundfont(JNIEnv* env, jclass clazz, jstring path, jint bank, jint program) {
     const char *nativePath = env->GetStringUTFChars(path, nullptr);
     synths[nextSfId] = new_fluid_synth(settings);
     drivers[nextSfId] = new_fluid_audio_driver(settings, synths[nextSfId]);
     int sfId = fluid_synth_sfload(synths[nextSfId], nativePath, 0);
-    fluid_synth_program_select(synths[nextSfId], 0, sfId, bank, program);
+    for (int i = 0; i < 16; i++) {
+        fluid_synth_program_select(synths[nextSfId], i, sfId, bank, program);
+    }
     env->ReleaseStringUTFChars(path, nativePath);
     soundfonts[nextSfId] = sfId;
     nextSfId++;

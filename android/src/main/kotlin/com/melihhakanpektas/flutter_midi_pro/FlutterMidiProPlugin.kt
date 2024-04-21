@@ -12,7 +12,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       System.loadLibrary("native-lib")
     }
     @JvmStatic
-    private external fun loadSoundfont(path: String): Int
+    private external fun loadSoundfont(path: String, bank: Int, program: Int): Int
 
     @JvmStatic
     private external fun selectInstrument(sfId: Int, channel:Int, bank: Int, program: Int)
@@ -39,7 +39,9 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     when (call.method) {
       "loadSoundfont" -> {
         val path = call.argument<String>("path") as String
-        val sfId = loadSoundfont(path)
+        val bank = call.argument<Int>("bank")?:0
+        val program = call.argument<Int>("program")?:0
+        val sfId = loadSoundfont(path, bank, program)
           if (sfId == -1) {
             result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
           } else {

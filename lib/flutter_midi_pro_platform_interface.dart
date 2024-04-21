@@ -4,14 +4,12 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 abstract class FlutterMidiProPlatform extends PlatformInterface {
   FlutterMidiProPlatform() : super(token: _token);
   static final Object _token = Object();
+  static FlutterMidiProPlatform _instance = MethodChannelFlutterMidiPro();
+  static FlutterMidiProPlatform get instance => _instance;
 
-  // Yeni bir FlutterMidiProPlatform örneği oluşturan bir fabrika metodu
-  factory FlutterMidiProPlatform.create() {
-    return MethodChannelFlutterMidiPro();
-  }
-
-  Future<void> init() {
-    throw UnimplementedError('init() has not been implemented.');
+  static set instance(FlutterMidiProPlatform instance) {
+    PlatformInterface.verifyToken(instance, _token);
+    _instance = instance;
   }
 
   Future<int> loadSoundfont(String path, int bank, int program) {

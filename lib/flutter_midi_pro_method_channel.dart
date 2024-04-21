@@ -8,13 +8,6 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   static const MethodChannel _channel = MethodChannel('flutter_midi_pro');
 
   @override
-  Future<void> init() async {
-    await _channel.invokeMethod('init').catchError((e) {
-      print(e);
-    });
-  }
-
-  @override
   Future<int> loadSoundfont(String path, int bank, int program) async {
     final int sfId = await _channel
         .invokeMethod('loadSoundfont', {'path': path, 'bank': bank, 'program': program});

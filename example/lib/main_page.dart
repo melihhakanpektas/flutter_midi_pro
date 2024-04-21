@@ -20,14 +20,6 @@ class _MainPageState extends State<MainPage> {
   final volume = ValueNotifier<int>(127);
   Map<int, NoteModel> pointerAndNote = {};
 
-  @override
-  void initState() {
-    midiPro.init().catchError((e) {
-      debugPrint(e.toString());
-    });
-    super.initState();
-  }
-
   /// Loads a soundfont file from the specified path.
   /// Returns the soundfont ID.
   Future<int> loadSoundfont(String path, int bank, int program) async {
