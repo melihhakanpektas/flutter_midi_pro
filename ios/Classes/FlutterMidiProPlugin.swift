@@ -5,9 +5,9 @@ import AVFoundation
 import CoreAudio
 
 public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
-  let audioEngine = AVAudioEngine()
+  var audioEngines: [Int: AVAudioEngine] = [:]
   var soundfontIndex = 1
-  var soundfontSamplers: [Int: AVAudioUnitSampler] = [0:AVAudioUnitSampler()]
+  var soundfontSamplers: [Int: AVAudioUnitSampler] = [:]
   var soundfontURLs: [Int: URL] = [:]
   
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -18,21 +18,14 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
-    case "init":
-    audioEngine.attach(soundfontSamplers[0]!)
-    audioEngine.connect(soundfontSamplers[0]!, to: audioEngine.mainMixerNode, format:nil)
-    do {
-        try audioEngine.start()
-    } catch {
-        print("Error starting audio engine: \(error.localizedDescription)")
-    }
-        result(nil)
     case "loadSoundfont":
         let args = call.arguments as! [String: Any]
         let path = args["path"] as! String
         let url = URL(fileURLWithPath: path)
-        let currentSoundfontIndex = soundfontIndex
         let soundfont = AVAudioUnitSampler()
+        let audioEngine = AVAudioEngine()
+        audioEngine.attach(soundfont)
+        audioEngine.connect(soundfont, to: audioEngine.mainMixerNode, format:nil)
         do {
             try soundfont.loadSoundBankInstrument(at: url,  program: UInt8(0), 
             bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: UInt8(kAUSampler_DefaultBankLSB))
@@ -40,12 +33,11 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
             result(FlutterError(code: "SOUND_FONT_LOAD_FAILED", message: "Failed to load soundfont", details: nil))
             return
         }
-        audioEngine.attach(soundfont)
-        audioEngine.connect(soundfont, to: audioEngine.mainMixerNode, format:nil)
-        soundfontSamplers[currentSoundfontIndex] = soundfont
-        soundfontURLs[currentSoundfontIndex] = url
+        soundfontSamplers[soundfontIndex] = soundfont
+        soundfontURLs[soundfontIndex] = url
+        audioEngines[soundfontIndex] = audioEngine
         soundfontIndex += 1
-        result(currentSoundfontIndex)
+        result(soundfontIndex-1)
     case "selectInstrument":
         let args = call.arguments as! [String: Any]
         let sfId = args["sfId"] as! Int

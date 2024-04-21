@@ -16,12 +16,13 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// To dispose of the FlutterMidiPro instance, you can use the [dispose] method.
 class MidiPro {
-  MidiPro();
+  final FlutterMidiProPlatform _platformInstance;
+  MidiPro() : _platformInstance = FlutterMidiProPlatform.create();
 
   /// Initializes the FlutterMidiPro instance.
   /// This must be called before using any other methods.
   Future<void> init() async {
-    return FlutterMidiProPlatform.instance.init();
+    return _platformInstance.init();
   }
 
   /// Loads a soundfont file from the specified path.
@@ -35,7 +36,7 @@ class MidiPro {
       await tempFile
           .writeAsBytes(buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes));
     }
-    return FlutterMidiProPlatform.instance.loadSoundfont(tempFile.path);
+    return _platformInstance.loadSoundfont(tempFile.path);
   }
 
   /// Selects an instrument on the specified soundfont.
@@ -60,7 +61,7 @@ class MidiPro {
     /// have banks, set this to 0.
     int bank = 0,
   }) async {
-    return FlutterMidiProPlatform.instance.selectInstrument(sfId, channel, bank, program);
+    return _platformInstance.selectInstrument(sfId, channel, bank, program);
   }
 
   /// Plays a note on the specified channel.
@@ -83,7 +84,7 @@ class MidiPro {
     /// The soundfont ID. First soundfont loaded is 1.
     required int sfId,
   }) async {
-    return FlutterMidiProPlatform.instance.playNote(channel, key, velocity, sfId);
+    return _platformInstance.playNote(channel, key, velocity, sfId);
   }
 
   /// Stops a note on the specified channel.
@@ -102,14 +103,14 @@ class MidiPro {
     /// The soundfont ID. First soundfont loaded is 1.
     required int sfId,
   }) async {
-    return FlutterMidiProPlatform.instance.stopNote(channel, key, sfId);
+    return _platformInstance.stopNote(channel, key, sfId);
   }
 
   /// Unloads a soundfont from memory.
   /// The soundfont ID is the ID returned by the [loadSoundfont] method.
   /// If resetPresets is true, the presets will be reset to the default values.
   Future<void> unloadSoundfont(int sfId) async {
-    return FlutterMidiProPlatform.instance.unloadSoundfont(sfId);
+    return _platformInstance.unloadSoundfont(sfId);
   }
 
   /// Disposes of the FlutterMidiPro instance.
@@ -119,6 +120,6 @@ class MidiPro {
   /// After disposing of the instance, the instance should not be used again.
   ///
   Future<void> dispose() async {
-    return FlutterMidiProPlatform.instance.dispose();
+    return _platformInstance.dispose();
   }
 }

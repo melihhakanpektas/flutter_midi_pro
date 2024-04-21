@@ -3,63 +3,60 @@
 #include <unistd.h>
 #include <map>
 
-// Global FluidSynth synthesizer instance
-fluid_synth_t* synth = NULL;
-std::map<int, int> soundfonts;
-fluid_audio_driver_t* driver = NULL;
-fluid_settings_t* settings = NULL;
-bool isInitialized = false;
+fluid_settings_t* settings = new_fluid_settings();
+std::map<int, fluid_synth_t*> synths = {};
+std::map<int, fluid_audio_driver_t*> drivers = {};
+std::map<int, int> soundfonts = {};
+int nextSfId = 1;
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_fluidsynthInit(JNIEnv* env,jclass clazz) {
-    if (isInitialized) {
-        throw std::runtime_error("FluidSynth is already initialized");
-    } else {
-        settings = new_fluid_settings();
-        synth = new_fluid_synth(settings);
-        driver = new_fluid_audio_driver(settings, synth);
-        isInitialized = true;
-    }
 }
 
 extern "C" JNIEXPORT int JNICALL
-Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_loadSoundfont(JNIEnv* env, jclass clazz, jstring path, jboolean resetPresets) {
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_loadSoundfont(JNIEnv* env, jclass clazz, jstring path) {
     const char *nativePath = env->GetStringUTFChars(path, nullptr);
-    int sfId = fluid_synth_sfload(synth, nativePath, resetPresets);
+    synths[nextSfId] = new_fluid_synth(settings);
+    drivers[nextSfId] = new_fluid_audio_driver(settings, synths[nextSfId]);
+    int sfId = fluid_synth_sfload(synths[nextSfId], nativePath, 0);
     env->ReleaseStringUTFChars(path, nativePath);
-    soundfonts[sfId] = sfId;
-    return sfId;
+    soundfonts[nextSfId] = sfId;
+    nextSfId++;
+    return nextSfId - 1;
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_selectInstrument(JNIEnv* env, jclass clazz, jint sfId, jint channel, jint bank, jint program) {
-    fluid_synth_program_select(synth, channel, soundfonts[sfId], bank, program);
+    fluid_synth_program_select(synths[sfId], channel, soundfonts[sfId], bank, program);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_playNote(JNIEnv* env, jclass clazz, jint channel, jint key, jint velocity) {
-    fluid_synth_noteon(synth, channel, key, velocity);
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_playNote(JNIEnv* env, jclass clazz, jint channel, jint key, jint velocity, jint sfId) {
+    fluid_synth_noteon(synths[sfId], channel, key, velocity);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_stopNote(JNIEnv* env, jclass clazz, jint channel, jint key) {
-    fluid_synth_noteoff(synth, channel, key);
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_stopNote(JNIEnv* env, jclass clazz, jint channel, jint key, jint sfId) {
+    fluid_synth_noteoff(synths[sfId], channel, key);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_unloadSoundfont(JNIEnv* env, jclass clazz, jint sfId, jboolean resetPresets) {
-    fluid_synth_sfunload(synth, soundfonts[sfId], resetPresets);
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_unloadSoundfont(JNIEnv* env, jclass clazz, jint sfId) {
+    delete_fluid_audio_driver(drivers[sfId]);
+    delete_fluid_synth(synths[sfId]);
+    synths.erase(sfId);
+    drivers.erase(sfId);
     soundfonts.erase(sfId);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_dispose(JNIEnv* env, jclass clazz) {
-    delete_fluid_audio_driver(driver);
-    delete_fluid_settings(settings);
-    delete_fluid_synth(synth);
-    synth = NULL;
-    driver = NULL;
-    settings = NULL;
+    for (auto const& x : synths) {
+        delete_fluid_audio_driver(drivers[x.first]);
+        delete_fluid_synth(synths[x.first]);
+    }
+    synths.clear();
+    drivers.clear();
     soundfonts.clear();
-    isInitialized = false;
+    delete_fluid_settings(settings);
 }

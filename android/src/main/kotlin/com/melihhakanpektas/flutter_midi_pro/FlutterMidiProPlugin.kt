@@ -15,19 +15,19 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     private external fun fluidsynthInit()
 
     @JvmStatic
-    private external fun loadSoundfont(path: String, resetPresets: Boolean): Int
+    private external fun loadSoundfont(path: String): Int
 
     @JvmStatic
     private external fun selectInstrument(sfId: Int, channel:Int, bank: Int, program: Int)
 
     @JvmStatic
-    private external fun playNote(channel: Int, key: Int, velocity: Int)
+    private external fun playNote(channel: Int, key: Int, velocity: Int, sfId: Int)
 
     @JvmStatic
-    private external fun stopNote(channel: Int, key: Int)
+    private external fun stopNote(channel: Int, key: Int, sfId: Int)
 
     @JvmStatic
-    private external fun unloadSoundfont(sfId: Int, resetPresets: Boolean = false)
+    private external fun unloadSoundfont(sfId: Int)
     @JvmStatic
     private external fun dispose()
   }
@@ -46,9 +46,8 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       }
       "loadSoundfont" -> {
         val path = call.argument<Int>("path") as? String?
-        val resetPresets = call.argument<Boolean>("resetPresets") ?: false
         if (path != null) {
-          val sfId = loadSoundfont(path, resetPresets)
+          val sfId = loadSoundfont(path)
           if (sfId == -1) {
             result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
           } else {
@@ -70,8 +69,9 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         val channel = call.argument<Int>("channel")
         val key = call.argument<Int>("key")
         val velocity = call.argument<Int>("velocity")
-        if (channel != null && key != null && velocity != null) {
-          playNote(channel, key, velocity)
+        val sfId = call.argument<Int>("sfId")
+        if (channel != null && key != null && velocity != null && sfId != null) {
+          playNote(channel, key, velocity, sfId)
           result.success(null)
         } else {
           result.error("INVALID_ARGUMENT", "channel, key, and velocity are required", null)
@@ -80,8 +80,9 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       "stopNote" -> {
         val channel = call.argument<Int>("channel")
         val key = call.argument<Int>("key")
-        if (channel != null && key != null) {
-          stopNote(channel, key)
+        val sfId = call.argument<Int>("sfId")
+        if (channel != null && key != null && sfId != null) {
+          stopNote(channel, key, sfId)
           result.success(null)
         } else {
           result.error("INVALID_ARGUMENT", "channel and key are required", null)
@@ -89,9 +90,8 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       }
       "unloadSoundfont" -> {
         val sfId = call.argument<Int>("sfId")
-        val resetPresets = call.argument<Boolean>("resetPresets") ?: false
         if (sfId != null) {
-          unloadSoundfont(sfId, resetPresets)
+          unloadSoundfont(sfId)
           result.success(null)
         } else {
           result.error("INVALID_ARGUMENT", "sfId is required", null)
