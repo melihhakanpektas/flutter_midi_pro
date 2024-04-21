@@ -20,7 +20,7 @@ class MidiPro {
 
   /// Loads a soundfont file from the specified path.
   /// Returns the sfId (SoundfontSamplerId).
-  Future<int> loadSoundfont(String path, int bank, int program) async {
+  Future<int> loadSoundfont({required String path, required int bank, required int program}) async {
     final tempDir = await getTemporaryDirectory();
     final tempFile = File('${tempDir.path}/${path.split('/').last}');
     if (!tempFile.existsSync()) {

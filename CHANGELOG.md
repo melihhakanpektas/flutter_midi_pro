@@ -26,3 +26,10 @@
 ## 2.0.1
 
 - Stop all notes added.
+
+## 3.0.0
+
+- Stop all notes deleted.
+- Init method deleted.
+- Android sythesizer method changed to fluidsynth for better performance, stability and sound quality.
+- iOS method equalizated with Android methods.
