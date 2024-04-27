@@ -5,6 +5,10 @@
 
 The `flutter_midi_pro` plugin provides functions for loading SoundFont (.sf2) files and playing MIDI notes in Flutter applications. This plugin is using fluidsynth on Android, AVFoundation on iOS and MacOS to play MIDI notes. The plugin is compatible with Android, iOS and macos platforms. Windows, Linux and Web support will be added in the future using fluidsynth.
 
+## Android (Important!)
+
+The Fluidsynth library used in Android needs to be built with CMake. Especially for flutter_midi_pro, CMake version 3.22.1 must be installed. To install CMake, check this comment: [CMake Installation](https://github.com/melihhakanpektas/flutter_midi_pro/issues/19#issuecomment-2081251955)
+
 ## Installation
 
 To use this plugin, add `flutter_midi_pro` using terminal or pubspec.yaml file.

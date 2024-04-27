@@ -33,3 +33,7 @@
 - Init method deleted.
 - Android sythesizer method changed to fluidsynth for better performance, stability and sound quality.
 - iOS method equalizated with Android methods.
+
+## 3.0.2
+
+- Readme updated.
