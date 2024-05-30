@@ -11,6 +11,7 @@ int nextSfId = 1;
 
 extern "C" JNIEXPORT int JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_loadSoundfont(JNIEnv* env, jclass clazz, jstring path, jint bank, jint program) {
+    fluid_settings_setnum(settings, "synth.gain", 1.0);
     const char *nativePath = env->GetStringUTFChars(path, nullptr);
     synths[nextSfId] = new_fluid_synth(settings);
     drivers[nextSfId] = new_fluid_audio_driver(settings, synths[nextSfId]);
