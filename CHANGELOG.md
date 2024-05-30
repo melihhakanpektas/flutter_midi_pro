@@ -41,3 +41,7 @@
 ## 3.1.0
 
 - Click sound when loading sf2 file was fixed.
+
+## 3.1.1
+
+- Low sound level on Android was fixed.
