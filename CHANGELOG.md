@@ -37,3 +37,7 @@
 ## 3.0.1
 
 - Readme updated.
+
+## 3.1.0
+
+- Click sound when loading sf2 file was fixed.
