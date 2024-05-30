@@ -1,9 +1,11 @@
 package com.melihhakanpektas.flutter_midi_pro
 
+import android.content.Context
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
+import android.media.AudioManager
 
 /** FlutterMidiProPlugin */
 class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
@@ -30,23 +32,29 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   }
 
   private lateinit var channel : MethodChannel
+  private lateinit var flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+    this.flutterPluginBinding = flutterPluginBinding
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
-  }
-  override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+  }  
+ override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
       "loadSoundfont" -> {
         val path = call.argument<String>("path") as String
         val bank = call.argument<Int>("bank")?:0
         val program = call.argument<Int>("program")?:0
+        val audioManager = flutterPluginBinding.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
         val sfId = loadSoundfont(path, bank, program)
-          if (sfId == -1) {
-            result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
-          } else {
-            result.success(sfId)
-          }
+        if (sfId == -1) {
+          result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
+        } else {
+          result.success(sfId)
+        }
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
       }
       "selectInstrument" -> {
         val sfId = call.argument<Int>("sfId")?:1
