@@ -55,12 +55,12 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
         val sfId = loadSoundfont(path, bank, program)
           delay(1000L)
+          audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
           if (sfId == -1) {
             result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
           } else {
             result.success(sfId)
           }
-          audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
         }
       }
       "selectInstrument" -> {

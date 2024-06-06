@@ -49,3 +49,7 @@
 ## 3.1.2
 
 - 1 second delay added when loading sf2 file.
+
+## 3.1.3
+
+- Sound level fix.
