@@ -6,6 +6,10 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import android.media.AudioManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** FlutterMidiProPlugin */
 class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
@@ -42,6 +46,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
  override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
       "loadSoundfont" -> {
+        CoroutineScope(Dispatchers.Main).launch {
         val path = call.argument<String>("path") as String
         val bank = call.argument<Int>("bank")?:0
         val program = call.argument<Int>("program")?:0
@@ -49,12 +54,14 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
         val sfId = loadSoundfont(path, bank, program)
-        if (sfId == -1) {
-          result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
-        } else {
-          result.success(sfId)
+          delay(1000L)
+          if (sfId == -1) {
+            result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
+          } else {
+            result.success(sfId)
+          }
+          audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
         }
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, currentVolume, 0)
       }
       "selectInstrument" -> {
         val sfId = call.argument<Int>("sfId")?:1
