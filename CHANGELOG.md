@@ -45,3 +45,7 @@
 ## 3.1.1
 
 - Low sound level on Android was fixed.
+
+## 3.1.2
+
+- 1 second delay added when loading sf2 file.
