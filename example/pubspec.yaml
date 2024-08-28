@@ -3,7 +3,8 @@ description: Demonstrates how to use the flutter_midi_pro plugin.
 publish_to: none
 version: 1.0.0+1
 environment:
-  sdk: ">=2.19.6 <3.0.0"
+  sdk: ">=3.4.3 <4.0.0"
+
 dependencies:
   flutter:
     sdk: flutter
