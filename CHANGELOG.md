@@ -53,3 +53,7 @@
 ## 3.1.3
 
 - Sound level fix.
+
+## 3.1.4
+
+- Cmake minsdkversion fix
