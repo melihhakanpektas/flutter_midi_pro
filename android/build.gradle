@@ -49,6 +49,7 @@ android {
 
     defaultConfig {
         minSdkVersion 21
+        namespace 'com.melihhakanpektas.flutter_midi_pro'
         
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
