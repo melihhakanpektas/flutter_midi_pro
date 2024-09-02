@@ -8,6 +8,11 @@ cmake_minimum_required(VERSION 3.4.1)
 set(fluidsynth_DIR ${CMAKE_CURRENT_SOURCE_DIR}/fluidsynth)
 # Our code (native-lib.cpp) will be calling fluidsynth functions, so we add the fluidsynth binaries as dependencies of our code.
 
+# Conditional flag for AArch64
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} --fix-cortex-a53-843419")
+endif()
+
 add_library(libc++_shared SHARED IMPORTED)
 set_target_properties(libc++_shared PROPERTIES IMPORTED_LOCATION ${fluidsynth_DIR}/lib/${ANDROID_ABI}/libc++_shared.so)
 
