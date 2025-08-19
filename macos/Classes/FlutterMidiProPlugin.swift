@@ -83,6 +83,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let sfId = args["sfId"] as! Int
         let soundfontSampler = soundfontSamplers[sfId]![channel]
         soundfontSampler.stopNote(UInt8(note), onChannel: UInt8(channel))
+        result(nil)
     case "unloadSoundfont":
         let args = call.arguments as! [String:Any]
         let sfId = args["sfId"] as! Int
