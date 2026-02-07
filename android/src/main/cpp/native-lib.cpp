@@ -17,6 +17,7 @@ extern "C" JNIEXPORT int JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_loadSoundfont(JNIEnv* env, jclass clazz, jstring path, jint bank, jint program) {
     settings[nextSfId] = new_fluid_settings();
     fluid_settings_setnum(settings[nextSfId], "synth.gain", 1.0);
+    // sayısal değerleri uygun setter ile ayarla
     fluid_settings_setint(settings[nextSfId], "audio.period-size", 64);
     fluid_settings_setint(settings[nextSfId], "audio.periods", 4);
     fluid_settings_setint(settings[nextSfId], "audio.realtime-prio", 99);
@@ -30,6 +31,7 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_loadSoundfont(
         fluid_synth_program_select(synths[nextSfId], i, sfId, bank, program);
     }
     env->ReleaseStringUTFChars(path, nativePath);
+    // Audio driver'ı en son oluştur
     drivers[nextSfId] = new_fluid_audio_driver(settings[nextSfId], synths[nextSfId]);
     soundfonts[nextSfId] = sfId;
     nextSfId++;
@@ -69,9 +71,10 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_stopNote(JNIEn
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_stopAllNotes(JNIEnv* env, jclass clazz, jint sfId) {
     if (synths.find(sfId) == synths.end()) return;
+    // Sustain'i kapat ve tüm kanallar için All Sound Off gönder
     for (int ch = 0; ch < 16; ++ch) {
-        fluid_synth_cc(synths[sfId], ch, 64, 0);
-        fluid_synth_all_sounds_off(synths[sfId], ch);
+        fluid_synth_cc(synths[sfId], ch, 64, 0); // Sustain off
+        fluid_synth_all_sounds_off(synths[sfId], ch); // Instant cut
     }
 }
 
