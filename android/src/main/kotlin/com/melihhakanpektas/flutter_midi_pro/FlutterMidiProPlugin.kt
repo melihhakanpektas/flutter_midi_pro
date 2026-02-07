@@ -22,7 +22,13 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     private external fun loadSoundfont(path: String, bank: Int, program: Int): Int
 
     @JvmStatic
+    private external fun loadSoundfontIntoSynth(existingSfId: Int, path: String, bank: Int, program: Int): Int
+
+    @JvmStatic
     private external fun selectInstrument(sfId: Int, channel:Int, bank: Int, program: Int)
+
+    @JvmStatic
+    private external fun selectInstrumentBySfontId(sfId: Int, channel: Int, fluidSfontId: Int, bank: Int, program: Int)
 
     @JvmStatic
     private external fun playNote(channel: Int, key: Int, velocity: Int, sfId: Int)
@@ -34,12 +40,29 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     private external fun stopAllNotes(sfId: Int)
 
     @JvmStatic
-  private external fun controlChange(sfId: Int, channel: Int, controller: Int, value: Int)
+    private external fun controlChange(sfId: Int, channel: Int, controller: Int, value: Int)
 
-  @JvmStatic
+    @JvmStatic
     private external fun unloadSoundfont(sfId: Int)
+
     @JvmStatic
     private external fun dispose()
+
+    // Sequencer API
+    @JvmStatic
+    private external fun createSequencer(sfId: Int)
+
+    @JvmStatic
+    private external fun getSequencerTick(sfId: Int): Int
+
+    @JvmStatic
+    private external fun scheduleNoteOn(sfId: Int, tick: Int, channel: Int, key: Int, velocity: Int)
+
+    @JvmStatic
+    private external fun scheduleNoteOff(sfId: Int, tick: Int, channel: Int, key: Int)
+
+    @JvmStatic
+    private external fun deleteSequencer(sfId: Int)
   }
 
   private lateinit var channel : MethodChannel
@@ -49,7 +72,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     this.flutterPluginBinding = flutterPluginBinding
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
-  }  
+  }
  override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
       "loadSoundfont" -> {
@@ -58,23 +81,43 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
           val bank = call.argument<Int>("bank")?:0
           val program = call.argument<Int>("program")?:0
           val audioManager = flutterPluginBinding.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-          
-          // Sesi mute yapma
+
           audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
-          
-          // Soundfont yükleme işlemi (senkron, bloke eden çağrı)
+
           val sfId = loadSoundfont(path, bank, program)
           delay(250)
-          
-          // Sesi tekrar açma
+
           audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-          
-          // Sonucu ana thread'de Flutter'a iletme
+
           withContext(Dispatchers.Main) {
             if (sfId == -1) {
               result.error("INVALID_ARGUMENT", "Something went wrong. Check the path of the template soundfont", null)
             } else {
               result.success(sfId)
+            }
+          }
+        }
+      }
+      "loadSoundfontIntoSynth" -> {
+        CoroutineScope(Dispatchers.IO).launch {
+          val existingSfId = call.argument<Int>("existingSfId") as Int
+          val path = call.argument<String>("path") as String
+          val bank = call.argument<Int>("bank") ?: 0
+          val program = call.argument<Int>("program") ?: 0
+          val audioManager = flutterPluginBinding.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+          audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+
+          val fluidSfId = loadSoundfontIntoSynth(existingSfId, path, bank, program)
+          delay(250)
+
+          audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+
+          withContext(Dispatchers.Main) {
+            if (fluidSfId == -1) {
+              result.error("INVALID_ARGUMENT", "Failed to load soundfont into existing synth", null)
+            } else {
+              result.success(fluidSfId)
             }
           }
         }
@@ -87,6 +130,15 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
           selectInstrument(sfId, channel, bank, program)
           result.success(null)
         }
+      "selectInstrumentBySfontId" -> {
+        val sfId = call.argument<Int>("sfId") as Int
+        val channel = call.argument<Int>("channel") ?: 0
+        val fluidSfontId = call.argument<Int>("fluidSfontId") as Int
+        val bank = call.argument<Int>("bank") ?: 0
+        val program = call.argument<Int>("program") ?: 0
+        selectInstrumentBySfontId(sfId, channel, fluidSfontId, bank, program)
+        result.success(null)
+      }
       "playNote" -> {
         val channel = call.argument<Int>("channel")
         val key = call.argument<Int>("key")
@@ -134,6 +186,39 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       }
       "dispose" -> {
         dispose()
+        result.success(null)
+      }
+      // Sequencer API
+      "createSequencer" -> {
+        val sfId = call.argument<Int>("sfId") as Int
+        createSequencer(sfId)
+        result.success(null)
+      }
+      "getSequencerTick" -> {
+        val sfId = call.argument<Int>("sfId") as Int
+        val tick = getSequencerTick(sfId)
+        result.success(tick)
+      }
+      "scheduleNoteOn" -> {
+        val sfId = call.argument<Int>("sfId") as Int
+        val tick = call.argument<Int>("tick") as Int
+        val channel = call.argument<Int>("channel") as Int
+        val key = call.argument<Int>("key") as Int
+        val velocity = call.argument<Int>("velocity") as Int
+        scheduleNoteOn(sfId, tick, channel, key, velocity)
+        result.success(null)
+      }
+      "scheduleNoteOff" -> {
+        val sfId = call.argument<Int>("sfId") as Int
+        val tick = call.argument<Int>("tick") as Int
+        val channel = call.argument<Int>("channel") as Int
+        val key = call.argument<Int>("key") as Int
+        scheduleNoteOff(sfId, tick, channel, key)
+        result.success(null)
+      }
+      "deleteSequencer" -> {
+        val sfId = call.argument<Int>("sfId") as Int
+        deleteSequencer(sfId)
         result.success(null)
       }
       else -> result.notImplemented()
