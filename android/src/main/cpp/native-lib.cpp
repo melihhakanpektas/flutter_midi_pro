@@ -112,7 +112,7 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_dispose(JNIEnv
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_createSequencer(JNIEnv* env, jclass clazz, jint sfId) {
     if (synths.find(sfId) == synths.end()) return;
-    fluid_sequencer_t* seq = new_fluid_sequencer2(1);  // use_system_timer=1
+    fluid_sequencer_t* seq = new_fluid_sequencer2(0);  // use_system_timer=0: audio thread drives dispatch
     fluid_seq_id_t synthId = fluid_sequencer_register_fluidsynth(seq, synths[sfId]);
     sequencers[sfId] = seq;
     synthSeqIds[sfId] = synthId;
