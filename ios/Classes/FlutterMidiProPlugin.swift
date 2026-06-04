@@ -5,10 +5,28 @@ import AVFoundation
 import CoreAudio
 
 public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
+  private static let defaultPlaybackStandardA4 = 440.0
+  private static let minPlaybackStandard = 400.0
+  private static let maxPlaybackStandard = 480.0
+
   var audioEngines: [Int: [AVAudioEngine]] = [:]
   var soundfontIndex = 1
   var soundfontSamplers: [Int: [AVAudioUnitSampler]] = [:]
   var soundfontURLs: [Int: URL] = [:]
+  var playbackStandardA4 = defaultPlaybackStandardA4
+
+  private func globalTuningCents(for a4Hz: Double) -> Float {
+    return Float(1200.0 * log2(a4Hz / Self.defaultPlaybackStandardA4))
+  }
+
+  private func applyPlaybackStandardToAllSamplers() {
+    let cents = globalTuningCents(for: playbackStandardA4)
+    for (_, samplers) in soundfontSamplers {
+      for sampler in samplers {
+        sampler.globalTuning = cents
+      }
+    }
+  }
   
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
@@ -107,6 +125,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
                 result(FlutterError(code: "SOUND_FONT_LOAD_FAILED1", message: "Failed to load soundfont", details: nil))
                 return
             }
+            sampler.globalTuning = globalTuningCents(for: playbackStandardA4)
             chSamplers.append(sampler)
             chAudioEngines.append(audioEngine)
         }
@@ -203,7 +222,24 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         }
         audioEngines = [:]
         soundfontSamplers = [:]
+        playbackStandardA4 = Self.defaultPlaybackStandardA4
         result(nil)
+    case "setPlaybackStandard":
+        let args = call.arguments as! [String: Any]
+        let standard = args["standard"] as! Double
+        if standard < Self.minPlaybackStandard || standard > Self.maxPlaybackStandard {
+            result(FlutterError(code: "INVALID_ARGUMENT", message: "standard must be between 400 and 480", details: nil))
+            return
+        }
+        playbackStandardA4 = standard
+        applyPlaybackStandardToAllSamplers()
+        result(nil)
+    case "resetPlaybackStandard":
+        playbackStandardA4 = Self.defaultPlaybackStandardA4
+        applyPlaybackStandardToAllSamplers()
+        result(nil)
+    case "getPlaybackStandard":
+        result(playbackStandardA4)
     default:
       result(FlutterMethodNotImplemented)
         break

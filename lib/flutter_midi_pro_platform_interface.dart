@@ -45,4 +45,19 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
   Future<void> dispose() {
     throw UnimplementedError('dispose() has not been implemented.');
   }
+
+  /// Sets the A4 reference frequency (Hz) used for playback tuning.
+  Future<void> setPlaybackStandard(double standard) {
+    throw UnimplementedError('setPlaybackStandard() has not been implemented.');
+  }
+
+  /// Resets playback tuning to the default A4 = 440 Hz standard.
+  Future<void> resetPlaybackStandard() {
+    throw UnimplementedError('resetPlaybackStandard() has not been implemented.');
+  }
+
+  /// Returns the current A4 reference frequency (Hz) used for playback tuning.
+  Future<double> getPlaybackStandard() {
+    throw UnimplementedError('getPlaybackStandard() has not been implemented.');
+  }
 }

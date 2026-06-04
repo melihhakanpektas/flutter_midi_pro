@@ -40,6 +40,18 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     private external fun unloadSoundfont(sfId: Int)
     @JvmStatic
     private external fun dispose()
+
+    @JvmStatic
+    private external fun setPlaybackStandard(standard: Double)
+
+    @JvmStatic
+    private external fun resetPlaybackStandard()
+
+    @JvmStatic
+    private external fun getPlaybackStandard(): Double
+
+    private const val MIN_PLAYBACK_STANDARD = 400.0
+    private const val MAX_PLAYBACK_STANDARD = 480.0
   }
 
   private lateinit var channel : MethodChannel
@@ -135,6 +147,22 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       "dispose" -> {
         dispose()
         result.success(null)
+      }
+      "setPlaybackStandard" -> {
+        val standard = call.argument<Double>("standard")
+        if (standard == null || standard < MIN_PLAYBACK_STANDARD || standard > MAX_PLAYBACK_STANDARD) {
+          result.error("INVALID_ARGUMENT", "standard must be between 400 and 480", null)
+          return
+        }
+        setPlaybackStandard(standard)
+        result.success(null)
+      }
+      "resetPlaybackStandard" -> {
+        resetPlaybackStandard()
+        result.success(null)
+      }
+      "getPlaybackStandard" -> {
+        result.success(getPlaybackStandard())
       }
       else -> result.notImplemented()
     }

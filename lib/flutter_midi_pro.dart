@@ -18,6 +18,15 @@ import 'package:path_provider/path_provider.dart';
 class MidiPro {
   MidiPro();
 
+  /// Default A4 reference frequency (Hz) for equal-temperament playback.
+  static const double defaultPlaybackStandard = 440.0;
+
+  /// Minimum allowed A4 reference frequency (Hz).
+  static const double minPlaybackStandard = 400.0;
+
+  /// Maximum allowed A4 reference frequency (Hz).
+  static const double maxPlaybackStandard = 480.0;
+
   /// Loads a soundfont file from the specified asset path.
   /// Returns the sfId (SoundfontSamplerId).
   Future<int> loadSoundfontAsset({required String assetPath, int bank = 0, int program = 0}) async {
@@ -156,6 +165,41 @@ class MidiPro {
   /// If resetPresets is true, the presets will be reset to the default values.
   Future<void> unloadSoundfont(int sfId) async {
     return FlutterMidiProPlatform.instance.unloadSoundfont(sfId);
+  }
+
+  /// Sets the A4 reference frequency (Hz) for playback tuning.
+  ///
+  /// Can be called at any time: before or after loading a soundfont, and while
+  /// playing. Already-loaded soundfonts are updated immediately on both Android
+  /// and iOS. Soundfonts loaded later automatically use the current standard.
+  ///
+  /// New [playNote] calls use the updated tuning. Notes already sounding may
+  /// keep the previous pitch until they are released and played again (platform
+  /// dependent; iOS often retunes sustained notes immediately).
+  ///
+  /// [standard] must be between [minPlaybackStandard] and [maxPlaybackStandard].
+  Future<void> setPlaybackStandard(double standard) async {
+    if (standard < minPlaybackStandard || standard > maxPlaybackStandard) {
+      throw ArgumentError.value(
+        standard,
+        'standard',
+        'Must be between $minPlaybackStandard and $maxPlaybackStandard Hz',
+      );
+    }
+    return FlutterMidiProPlatform.instance.setPlaybackStandard(standard);
+  }
+
+  /// Resets playback tuning to [defaultPlaybackStandard] (440 Hz A4).
+  ///
+  /// Like [setPlaybackStandard], this can be called at any time and applies to
+  /// all loaded soundfonts immediately.
+  Future<void> resetPlaybackStandard() async {
+    return FlutterMidiProPlatform.instance.resetPlaybackStandard();
+  }
+
+  /// Returns the current A4 reference frequency (Hz) used for playback tuning.
+  Future<double> getPlaybackStandard() async {
+    return FlutterMidiProPlatform.instance.getPlaybackStandard();
   }
 
   /// Disposes of the FlutterMidiPro instance.

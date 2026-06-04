@@ -55,4 +55,20 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   Future<void> dispose() async {
     await _channel.invokeMethod('dispose');
   }
+
+  @override
+  Future<void> setPlaybackStandard(double standard) async {
+    await _channel.invokeMethod('setPlaybackStandard', {'standard': standard});
+  }
+
+  @override
+  Future<void> resetPlaybackStandard() async {
+    await _channel.invokeMethod('resetPlaybackStandard');
+  }
+
+  @override
+  Future<double> getPlaybackStandard() async {
+    final standard = await _channel.invokeMethod<double>('getPlaybackStandard');
+    return standard ?? 440.0;
+  }
 }
