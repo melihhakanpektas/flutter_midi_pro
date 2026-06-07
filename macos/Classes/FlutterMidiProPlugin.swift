@@ -18,52 +18,25 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   
   public override init() {
     super.init()
-    setupAudioSessionNotifications()
+    setupAudioEngineNotifications()
   }
   
   deinit {
     NotificationCenter.default.removeObserver(self)
   }
   
-  private func setupAudioSessionNotifications() {
-    // On macOS, we also listen for interruptions but they're less common
-    // AVAudioSession is available on macOS 10.15+
-    if #available(macOS 10.15, *) {
-      NotificationCenter.default.addObserver(
-        self,
-        selector: #selector(handleAudioSessionInterruption),
-        name: AVAudioSession.interruptionNotification,
-        object: AVAudioSession.sharedInstance()
-      )
-    }
+  private func setupAudioEngineNotifications() {
+    // AVAudioSession is iOS-only; on macOS listen for engine configuration changes instead.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleAudioEngineConfigurationChange),
+      name: .AVAudioEngineConfigurationChange,
+      object: nil
+    )
   }
   
-  @objc private func handleAudioSessionInterruption(notification: Notification) {
-    guard let userInfo = notification.userInfo,
-          let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
-          let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
-      return
-    }
-    
-    switch type {
-    case .began:
-      // Interruption began - audio engines will be stopped automatically by the system
-      break
-    case .ended:
-      // Interruption ended - restart all audio engines
-      // Check if we should resume (if option is present and true, or if option is missing)
-      var shouldResume = true
-      if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
-        let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-        shouldResume = options.contains(.shouldResume)
-      }
-      
-      if shouldResume {
-        restartAudioEngines()
-      }
-    @unknown default:
-      break
-    }
+  @objc private func handleAudioEngineConfigurationChange(notification: Notification) {
+    restartAudioEngines()
   }
   
   private func restartAudioEngines() {
