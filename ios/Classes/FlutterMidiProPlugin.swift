@@ -32,6 +32,23 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
       name: AVAudioSession.interruptionNotification,
       object: AVAudioSession.sharedInstance()
     )
+    // The system stops an AVAudioEngine when the output configuration changes
+    // (headphones/Bluetooth connect or disconnect, sample rate change). This
+    // does NOT fire an interruption notification, so without this observer the
+    // engines stay silent until the app is relaunched.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleEngineConfigurationChange),
+      name: .AVAudioEngineConfigurationChange,
+      object: nil
+    )
+  }
+
+  @objc private func handleEngineConfigurationChange(notification: Notification) {
+    guard let engine = notification.object as? AVAudioEngine else { return }
+    DispatchQueue.main.async {
+      self.restartEngine(engine)
+    }
   }
   
   @objc private func handleAudioSessionInterruption(notification: Notification) {
@@ -63,6 +80,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   }
   
   private func restartAudioEngines() {
+    reactivateAudioSession()
     for (sfId, engines) in audioEngines {
       for (index, engine) in engines.enumerated() {
         if !engine.isRunning {
@@ -73,6 +91,34 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
           }
         }
       }
+    }
+  }
+
+  private func restartEngine(_ engine: AVAudioEngine) {
+    guard !engine.isRunning else { return }
+    reactivateAudioSession()
+    // Reconnect the sampler so it picks up the new output format before restarting.
+    for (sfId, engines) in audioEngines {
+      if let index = engines.firstIndex(where: { $0 === engine }),
+         let sampler = soundfontSamplers[sfId]?[index] {
+        engine.disconnectNodeOutput(sampler)
+        engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+      }
+    }
+    do {
+      try engine.start()
+    } catch {
+      print("Failed to restart audio engine: \(error)")
+    }
+  }
+
+  private func reactivateAudioSession() {
+    // An interruption can leave the shared session deactivated; engines fail to
+    // start (or start silently) until it is active again.
+    do {
+      try AVAudioSession.sharedInstance().setActive(true)
+    } catch {
+      print("Failed to re-activate audio session: \(error)")
     }
   }
 
@@ -170,6 +216,11 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let velocity = args["velocity"] as! Int
         let sfId = args["sfId"] as! Int
         let soundfontSampler = soundfontSamplers[sfId]![channel]
+        // Safety net: if a stop notification was missed, revive the engine so a
+        // note can never be played into a dead engine.
+        if let engine = audioEngines[sfId]?[channel], !engine.isRunning {
+            restartEngine(engine)
+        }
         soundfontSampler.startNote(UInt8(note), withVelocity: UInt8(velocity), onChannel: UInt8(channel))
         result(nil)
     case "stopNote":
