@@ -375,6 +375,10 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let note = args["key"] as! Int
         let velocity = args["velocity"] as! Int
         let sfId = args["sfId"] as! Int
+        // Self-heal if a missed notification left the engine stopped (PR #55).
+        if let engine = audioEngine, !engine.isRunning {
+            try? engine.start()
+        }
         guard let soundfontSampler = samplerFor(sfId: sfId, channel: channel) else {
             result(nil)
             return
