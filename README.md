@@ -1,9 +1,18 @@
 # flutter_midi_pro
 
-[![pub package](https://img.shields.io/pub/v/flutter_midi_pro.svg)](https://pub.dartlang.org/packages/flutter_midi_pro)[![GitHub stars](https://img.shields.io/github/stars/MelihHakanPektas/flutter_midi_pro.svg?style=social)](https://github.com/MelihHakanPektas/flutter_midi_pro)
+[![pub package](https://img.shields.io/pub/v/flutter_midi_pro.svg)](https://pub.dev/packages/flutter_midi_pro)[![GitHub stars](https://img.shields.io/github/stars/MelihHakanPektas/flutter_midi_pro.svg?style=social)](https://github.com/MelihHakanPektas/flutter_midi_pro)
 [![GitHub issues](https://img.shields.io/github/issues/MelihHakanPektas/flutter_midi_pro.svg)](https://github.com/MelihHakanPektas/flutter_midi_pro/issues)
 
-The `flutter_midi_pro` plugin provides functions for loading SoundFont (.sf2) files and playing MIDI notes in Flutter applications. This plugin is using fluidsynth on Android, AVFoundation on iOS and MacOS to play MIDI notes. The plugin is compatible with Android, iOS and macos platforms. Windows, Linux and Web support will be added in the future using fluidsynth.
+A SoundFont (.sf2) synthesizer plugin for Flutter, powered by FluidSynth on Android and AVFoundation on iOS/macOS.
+
+- Load multiple SoundFonts at once and play notes on 16 MIDI channels per soundfont
+- Full expression surface: pitch bend (+ bend range), channel/key aftertouch, any MIDI CC, sustain, master gain, panic
+- List the instruments inside an SF2 (`getPresets`) and switch presets per channel
+- MIDI file (.mid) playback with pitch-preserving tempo control, seek and loop (Android)
+- Built-in effects: reverb & chorus (FluidSynth), equalizer / delay / distortion (iOS/macOS)
+- Explicit `init`/`dispose` lifecycle, pop-free audio, automatic recovery from interruptions and route changes
+
+Windows, Linux and Web support may be added in the future.
 
 ## Android
 
@@ -36,6 +45,8 @@ The package does nothing until it is initialized: no audio engine is created and
 ```dart
 final midiPro = MidiPro();
 await midiPro.init();
+// Optional tuning knobs (defaults shown):
+// await midiPro.init(sampleRate: 44100, bufferSize: 64, polyphony: 64);
 ```
 
 Calling `init` while already initialized throws a `StateError` (call `dispose` first to re-initialize), and calling any other method before `init` also throws a `StateError`. You can check the current state with `midiPro.isInitialized`.
@@ -43,35 +54,57 @@ Calling `init` while already initialized throws a `StateError` (call `dispose` f
 ### Load SoundFont File
 
 Use the `loadSoundfontAsset`, `loadSoundfontFile` or `loadSoundfontData` functions to load a SoundFont file. These functions return an integer value that represents the soundfont ID. You can use this ID to load instruments from the SoundFont file and play MIDI notes.
-These functions load the instrument at the given bank and program number to all channels at (0-15). If you want to load a specific instrument, you can use the `selectInstrument` function.
+These functions load the instrument at the given bank and program number to all channels (0-15). If you want to load a specific instrument, you can use the `selectInstrument` function. Up to 16 soundfonts can be loaded at the same time; call `unloadSoundfont(sfId)` to release one.
 
 ```dart
 final soundfontId = await midiPro.loadSoundfontAsset(assetPath: 'assets/soundfont.sf2', bank: 0, program: 0);
 ```
 
-### Select Instrument
+### List and Select Instruments
 
-Use the `selectInstrument` function to select an instrument at the given bank and program from the SoundFont file to specific channel.
+`getPresets` lists every instrument inside a loaded soundfont — ready to feed an instrument picker — and `selectInstrument` binds an instrument at the given bank and program to a specific channel.
 
 ```dart
-await MidiPro().selectInstrument(sfId: soundfontId, channel: 0, bank: 0, program: 0);
+final presets = await midiPro.getPresets(soundfontId); // [(bank, program, name), ...]
+await midiPro.selectInstrument(sfId: soundfontId, channel: 0, bank: 0, program: 0);
 ```
 
-### Play MIDI Note
+### Play and Stop Notes
 
-Use the `playMidiNote` function to play a MIDI note with a given MIDI value and velocity. The MIDI value is the MIDI number of the note you want to play (0-127). The velocity is the volume of the note (0-127).
+Use the `playNote` function to play a MIDI note. The key is the MIDI note number (0-127) and the velocity is the volume of the note (0-127). `stopNote` stops it on the same channel.
 
 ```dart
 midiPro.playNote(sfId: soundfontId, channel: 0, key: 60, velocity: 127);
-```
-
-### Stop MIDI Note
-
-Use the `stopMidiNote` function to stop a MIDI note with a given MIDI number. This function stops the note on specific channel.
-
-```dart
 midiPro.stopNote(sfId: soundfontId, channel: 0, key: 60);
 ```
+
+### Expression and Control
+
+```dart
+await midiPro.pitchBend(value: 12000, channel: 0, sfId: soundfontId); // 0-16383, 8192 = center
+await midiPro.setPitchBendRange(semitones: 12, channel: 0, sfId: soundfontId);
+await midiPro.channelPressure(pressure: 90, channel: 0, sfId: soundfontId); // aftertouch
+await midiPro.setSustain(enabled: true, channel: 0, sfId: soundfontId);
+await midiPro.controlChange(controller: 10, value: 30, channel: 0, sfId: soundfontId); // any MIDI CC
+await midiPro.setMasterGain(1.5); // global volume, 1.0 = default
+await midiPro.panic();            // instantly silence everything
+```
+
+`sendMidiEvent` accepts raw MIDI channel messages, which makes it easy to bridge hardware MIDI input straight into the synthesizer.
+
+### MIDI File Player (Android)
+
+Play Standard MIDI Files through a loaded soundfont — with pitch-preserving tempo scaling for practice, seeking and looping. File channels 0-15 play on the target soundfont's channels, so instrument selection and expression controls apply to playback too.
+
+```dart
+await midiPro.loadMidiAsset(assetPath: 'assets/song.mid', sfId: soundfontId);
+await midiPro.setMidiTempo(0.5); // half speed, same pitch
+await midiPro.setMidiLoop(-1);   // loop forever
+await midiPro.playMidi();        // pauseMidi() / stopMidi() / seekMidi(tick)
+final state = await midiPro.getMidiPlayerState(); // status, position, BPM, PPQ
+```
+
+Currently Android-only; iOS/macOS throw an `UNSUPPORTED` error for these methods.
 
 ### Dispose
 
@@ -106,413 +139,24 @@ await midiPro.setDistortion(enabled: true, preset: DistortionPreset.multiDistort
 
 ### Platform support
 
-| Feature | Android | iOS | macOS |
-| --- | :-: | :-: | :-: |
-| Notes, control change, pitch bend, aftertouch, master gain, panic | ✅ | ✅ | ✅ |
-| Preset listing (`getPresets`) | ✅ | ✅ | ✅ |
-| Reverb (`setReverb`) | ✅ full parameters | ✅ preset + level | ✅ preset + level |
-| Chorus (`setChorus`) | ✅ | — | — |
-| Equalizer / Delay / Distortion | — | ✅ | ✅ |
-| Audio session config (`configureAudioSession`) | — | ✅ | — |
-| MIDI file player (`loadMidiFile`, `playMidi`, …) | ✅ | planned | planned |
-| `init` sampleRate/bufferSize/polyphony | ✅ synth settings | ✅ session preferences (no polyphony) | — |
+| Feature                                                           |      Android       |                  iOS                  |       macOS       |
+| ----------------------------------------------------------------- | :----------------: | :-----------------------------------: | :---------------: |
+| Notes, control change, pitch bend, aftertouch, master gain, panic |         ✅         |                  ✅                   |        ✅         |
+| Preset listing (`getPresets`)                                     |         ✅         |                  ✅                   |        ✅         |
+| Reverb (`setReverb`)                                              | ✅ full parameters |           ✅ preset + level           | ✅ preset + level |
+| Chorus (`setChorus`)                                              |         ✅         |                   —                   |         —         |
+| Equalizer / Delay / Distortion                                    |         —          |                  ✅                   |        ✅         |
+| Audio session config (`configureAudioSession`)                    |         —          |                  ✅                   |         —         |
+| MIDI file player (`loadMidiFile`, `playMidi`, …)                  |         ✅         |                planned                |      planned      |
+| `init` sampleRate/bufferSize/polyphony                            | ✅ synth settings  | ✅ session preferences (no polyphony) |         —         |
 
 ## Example
 
-Here's an example of how you could use the `flutter_midi_pro` plugin to play a piano using a SoundFont file and using the `flutter_piano_pro`:
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_midi_pro/flutter_midi_pro.dart';
-import 'package:flutter_piano_pro/flutter_piano_pro.dart';
-import 'package:flutter_piano_pro/note_model.dart';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  final MidiPro midiPro = MidiPro();
-  final ValueNotifier<Map<int, String>> loadedSoundfonts = ValueNotifier<Map<int, String>>({});
-  final ValueNotifier<int?> selectedSfId = ValueNotifier<int?>(null);
-  final instrumentIndex = ValueNotifier<int>(0);
-  final bankIndex = ValueNotifier<int>(0);
-  final channelIndex = ValueNotifier<int>(0);
-  final volume = ValueNotifier<int>(127);
-  Map<int, NoteModel> pointerAndNote = {};
-
-  @override
-  void initState() {
-    super.initState();
-    midiPro.init();
-  }
-
-  @override
-  void dispose() {
-    midiPro.dispose();
-    super.dispose();
-  }
-
-  /// Loads a soundfont file from the specified path.
-  /// Returns the soundfont ID.
-  Future<int> loadSoundfont(String path, int bank, int program) async {
-    if (loadedSoundfonts.value.containsValue(path)) {
-      print('Soundfont file: $path already loaded. Returning ID.');
-      return loadedSoundfonts.value.entries.firstWhere((element) => element.value == path).key;
-    }
-    final int sfId = await midiPro.loadSoundfontAsset(assetPath: path, bank: bank, program: program);
-    loadedSoundfonts.value = {sfId: path, ...loadedSoundfonts.value};
-    print('Loaded soundfont file: $path with ID: $sfId');
-    return sfId;
-  }
-
-  /// Selects an instrument on the specified soundfont.
-  Future<void> selectInstrument({
-    required int sfId,
-    required int program,
-    int channel = 0,
-    int bank = 0,
-  }) async {
-    int? sfIdValue = sfId;
-    if (!loadedSoundfonts.value.containsKey(sfId)) {
-      sfIdValue = loadedSoundfonts.value.keys.first;
-    } else {
-      selectedSfId.value = sfId;
-    }
-    print('Selected soundfont file: $sfIdValue');
-    await midiPro.selectInstrument(sfId: sfIdValue, channel: channel, bank: bank, program: program);
-  }
-
-  /// Plays a note on the specified channel.
-  Future<void> playNote({
-    required int key,
-    required int velocity,
-    int channel = 0,
-    int sfId = 1,
-  }) async {
-    int? sfIdValue = sfId;
-    if (!loadedSoundfonts.value.containsKey(sfId)) {
-      sfIdValue = loadedSoundfonts.value.keys.first;
-    }
-    await midiPro.playNote(channel: channel, key: key, velocity: velocity, sfId: sfIdValue);
-  }
-
-  /// Stops a note on the specified channel.
-  Future<void> stopNote({
-    required int key,
-    int channel = 0,
-    int sfId = 1,
-  }) async {
-    int? sfIdValue = sfId;
-    if (!loadedSoundfonts.value.containsKey(sfId)) {
-      sfIdValue = loadedSoundfonts.value.keys.first;
-    }
-    await midiPro.stopNote(channel: channel, key: key, sfId: sfIdValue);
-  }
-
-  /// Unloads a soundfont file.
-  Future<void> unloadSoundfont(int sfId) async {
-    await midiPro.unloadSoundfont(sfId);
-    loadedSoundfonts.value = {
-      for (final entry in loadedSoundfonts.value.entries)
-        if (entry.key != sfId) entry.key: entry.value
-    };
-    if (selectedSfId.value == sfId) selectedSfId.value = null;
-  }
-
-  final sf2Paths = ['assets/TimGM6mb.sf2', 'assets/SalC5Light2.sf2'];
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.amber,
-        brightness: Brightness.dark,
-      ),
-      home: Scaffold(
-      appBar: AppBar(
-        title: const Text('Flutter Midi Pro Example'),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                const SizedBox(
-                  height: 10,
-                ),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        sf2Paths.length,
-                        (index) => ElevatedButton(
-                          onPressed: () => loadSoundfont(
-                              sf2Paths[index], bankIndex.value, instrumentIndex.value),
-                          child: Text('Load Soundfont ${sf2Paths[index]}'),
-                        ),
-                      )),
-                ),
-                const SizedBox(
-                  height: 10,
-                ),
-                ValueListenableBuilder(
-                    valueListenable: loadedSoundfonts,
-                    builder: (context, value, child) {
-                      if (value.isEmpty) {
-                        return const Text('No soundfont file loaded');
-                      }
-                      return Column(
-                        children: [
-                          const Text('Loaded Soundfont files:'),
-                          for (final entry in value.entries)
-                            ListTile(
-                              title: Text(entry.value),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ValueListenableBuilder(
-                                      valueListenable: selectedSfId,
-                                      builder: (context, selectedSfIdValue, child) {
-                                        return ElevatedButton(
-                                          onPressed: selectedSfIdValue == entry.key
-                                              ? null
-                                              : () => selectedSfId.value = entry.key,
-                                          child: Text(selectedSfIdValue == entry.key
-                                              ? 'Selected'
-                                              : 'Select'),
-                                        );
-                                      }),
-                                  ElevatedButton(
-                                    onPressed: () => unloadSoundfont(entry.key),
-                                    child: const Text('Unload'),
-                                  ),
-                                ],
-                              ),
-                            )
-                        ],
-                      );
-                    }),
-                ValueListenableBuilder(
-                    valueListenable: selectedSfId,
-                    builder: (context, selectedSfIdValue, child) {
-                      return Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              ValueListenableBuilder(
-                                  valueListenable: bankIndex,
-                                  builder: (context, bankIndexValue, child) {
-                                    return DropdownButton<int>(
-                                        value: bankIndexValue,
-                                        items: [
-                                          for (int i = 0; i < 128; i++)
-                                            DropdownMenuItem<int>(
-                                              value: i,
-                                              child: Text(
-                                                'Bank $i',
-                                                style: const TextStyle(fontSize: 13),
-                                              ),
-                                            )
-                                        ],
-                                        onChanged: (int? value) {
-                                          if (value != null) {
-                                            bankIndex.value = value;
-                                          }
-                                        });
-                                  }),
-                              ValueListenableBuilder(
-                                  valueListenable: instrumentIndex,
-                                  builder: (context, channelValue, child) {
-                                    return DropdownButton<int>(
-                                        value: channelValue,
-                                        items: [
-                                          for (int i = 0; i < 128; i++)
-                                            DropdownMenuItem<int>(
-                                              value: i,
-                                              child: Text(
-                                                'Instrument $i',
-                                                style: const TextStyle(fontSize: 13),
-                                              ),
-                                            )
-                                        ],
-                                        onChanged: (int? value) {
-                                          if (value != null) {
-                                            instrumentIndex.value = value;
-                                          }
-                                        });
-                                  }),
-                              ValueListenableBuilder(
-                                  valueListenable: channelIndex,
-                                  builder: (context, channelIndexValue, child) {
-                                    return DropdownButton<int>(
-                                        value: channelIndexValue,
-                                        items: [
-                                          for (int i = 0; i < 16; i++)
-                                            DropdownMenuItem<int>(
-                                              value: i,
-                                              child: Text(
-                                                'Channel $i',
-                                                style: const TextStyle(fontSize: 13),
-                                              ),
-                                            )
-                                        ],
-                                        onChanged: (int? value) {
-                                          if (value != null) {
-                                            channelIndex.value = value;
-                                          }
-                                        });
-                                  }),
-                            ],
-                          ),
-                          ValueListenableBuilder(
-                              valueListenable: bankIndex,
-                              builder: (context, bankIndexValue, child) {
-                                return ValueListenableBuilder(
-                                    valueListenable: channelIndex,
-                                    builder: (context, channelIndexValue, child) {
-                                      return ValueListenableBuilder(
-                                          valueListenable: instrumentIndex,
-                                          builder: (context, instrumentIndexValue, child) {
-                                            return ElevatedButton(
-                                                onPressed: selectedSfIdValue != null
-                                                    ? () => selectInstrument(
-                                                          sfId: selectedSfIdValue,
-                                                          program: instrumentIndexValue,
-                                                          bank: bankIndexValue,
-                                                          channel: channelIndexValue,
-                                                        )
-                                                    : null,
-                                                child: Text(
-                                                    'Load Instrument $instrumentIndexValue on Bank $bankIndexValue to Channel $channelIndexValue'));
-                                          });
-                                    });
-                              }),
-                          Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: ValueListenableBuilder(
-                                  valueListenable: volume,
-                                  child: const Text('Volume: '),
-                                  builder: (context, value, child) {
-                                    return Row(
-                                      children: [
-                                        child!,
-                                        Expanded(
-                                            child: Slider(
-                                          value: value.toDouble(),
-                                          min: 0,
-                                          max: 127,
-                                          onChanged: selectedSfIdValue != null
-                                              ? (value) => volume.value = value.toInt()
-                                              : null,
-                                        )),
-                                        const SizedBox(
-                                          width: 10,
-                                        ),
-                                        Text('${volume.value}'),
-                                      ],
-                                    );
-                                  })),
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: ElevatedButton(
-                              onPressed: !(selectedSfIdValue != null)
-                                  ? null
-                                  : () => unloadSoundfont(loadedSoundfonts.value.keys.first),
-                              child: const Text('Unload Soundfont file'),
-                            ),
-                          ),
-                          Stack(
-                            children: [
-                              PianoPro(
-                                noteCount: 15,
-                                onTapDown: (NoteModel? note, int tapId) {
-                                  if (note == null) return;
-                                  pointerAndNote[tapId] = note;
-                                  playNote(
-                                      key: note.midiNoteNumber,
-                                      velocity: volume.value,
-                                      channel: channelIndex.value,
-                                      sfId: selectedSfIdValue!);
-                                  debugPrint(
-                                      'DOWN: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
-                                },
-                                onTapUpdate: (NoteModel? note, int tapId) {
-                                  if (note == null) return;
-                                  if (pointerAndNote[tapId] == note) return;
-                                  stopNote(
-                                      key: pointerAndNote[tapId]!.midiNoteNumber,
-                                      channel: channelIndex.value,
-                                      sfId: selectedSfIdValue!);
-                                  pointerAndNote[tapId] = note;
-                                  playNote(
-                                      channel: channelIndex.value,
-                                      key: note.midiNoteNumber,
-                                      velocity: volume.value,
-                                      sfId: selectedSfIdValue);
-                                  debugPrint(
-                                      'UPDATE: note= ${note.name + note.octave.toString() + (note.isFlat ? "♭" : '')}, tapId= $tapId');
-                                },
-                                onTapUp: (int tapId) {
-                                  stopNote(
-                                      key: pointerAndNote[tapId]!.midiNoteNumber,
-                                      channel: channelIndex.value,
-                                      sfId: selectedSfIdValue!);
-                                  pointerAndNote.remove(tapId);
-                                  debugPrint('UP: tapId= $tapId');
-                                },
-                              ),
-                              if (selectedSfIdValue == null)
-                                Positioned.fill(
-                                  child: Container(
-                                    color: Colors.black.withOpacity(0.5),
-                                    child: const Center(
-                                      child: Text(
-                                        'Load Soundfont file\nMust be called before other methods',
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                            ],
-                          )
-                        ],
-                      );
-                    }),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-    );
-  }
-}
-
-```
+You can find a complete example in the [example](https://github.com/melihhakanpektas/flutter_midi_pro/tree/main/example) directory — an interactive playground covering the full lifecycle (init/dispose), soundfont loading, an instrument picker built on `getPresets`, a piano with pitch bend, master gain, effects and the MIDI file player.
 
 ## Contributions
 
 Contributions are welcome! Please feel free to submit a PR or open an issue.
-
-### TODOS
-
-- [ ] Add support for Web, Windows, and Linux.
-- [ ] Add support for channel feature (MIDI Channels).
-- [ ] Add controller support
-- [ ] Add support for MIDI files.
 
 ### Contact
 
@@ -520,7 +164,7 @@ If you have any questions or suggestions, feel free to contact the package maint
 
 ![Melih Hakan Pektas](https://avatars.githubusercontent.com/u/108405689?s=100&v=4)
 
-Thank you for contributing to flutter_piano_pro!
+Thank you for contributing to flutter_midi_pro!
 
 ## License
 
