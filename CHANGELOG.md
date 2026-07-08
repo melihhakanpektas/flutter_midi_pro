@@ -121,3 +121,7 @@
 ## 4.0.2
 
 - No longer applies the Kotlin Gradle Plugin on Flutter versions with built-in Kotlin support (AGP 9+); on older versions it is applied conditionally, so the minimum supported Flutter version is unchanged (#54). The `kotlinOptions` block was replaced with the `kotlin.compilerOptions` DSL accordingly.
+
+## 4.0.3
+
+- Readme updated to point to the new example directory.
