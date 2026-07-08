@@ -1,18 +1,24 @@
 # For more information about using CMake with Android Studio, read the
 # documentation: https://d.android.com/studio/projects/add-native-code.html
 
-# Sets the minimum version of CMake required to build the native library.
-cmake_minimum_required(VERSION 3.4.1)
+# 3.18 is the floor shipped with AGP 7+; a minimum below 3.5 is a hard error
+# on CMake 4.x, so keep this in the 3.18..4.x compatible range.
+cmake_minimum_required(VERSION 3.18)
+project(flutter_midi_pro)
 
-# Create a variable fluidsynth_DIR to specify where the fluidsynth library is located.
-set(fluidsynth_DIR ${CMAKE_CURRENT_SOURCE_DIR}/fluidsynth)
+# FLUIDSYNTH_DIR is normally passed by build.gradle, which downloads the
+# official FluidSynth Android binaries at build time (they are too large to
+# ship in the package). A vendored copy at src/main/cpp/fluidsynth is used as
+# a fallback for offline builds.
+if(NOT DEFINED FLUIDSYNTH_DIR)
+    set(FLUIDSYNTH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/fluidsynth)
+endif()
+set(fluidsynth_DIR ${FLUIDSYNTH_DIR})
 # Our code (native-lib.cpp) will be calling fluidsynth functions, so we add the fluidsynth binaries as dependencies of our code.
 
-add_library(libc++_shared SHARED IMPORTED)
-set_target_properties(libc++_shared PROPERTIES IMPORTED_LOCATION ${fluidsynth_DIR}/lib/${ANDROID_ABI}/libc++_shared.so)
-
-add_library(libomp SHARED IMPORTED)
-set_target_properties(libomp PROPERTIES IMPORTED_LOCATION ${fluidsynth_DIR}/lib/${ANDROID_ABI}/libomp.so)
+# The official FluidSynth Android binaries depend on libc++_shared.so but do
+# not ship it; ANDROID_STL=c++_shared (set in build.gradle) makes the NDK
+# provide and package it.
 
 add_library(libFLAC SHARED IMPORTED)
 set_target_properties(libFLAC PROPERTIES IMPORTED_LOCATION ${fluidsynth_DIR}/lib/${ANDROID_ABI}/libFLAC.so)
@@ -77,8 +83,6 @@ target_include_directories(native-lib PRIVATE ${fluidsynth_DIR}/include)
 # Link everything alltogether. Notice that native-lib should be the first element in the list.
 target_link_libraries(
         native-lib
-        libomp
-        libc++_shared
         libFLAC
         libfluidsynth
         libfluidsynth-assetloader

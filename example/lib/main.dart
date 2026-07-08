@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:flutter_piano_pro/flutter_piano_pro.dart';
@@ -23,7 +26,194 @@ class _MyAppState extends State<MyApp> {
   final channelIndex = ValueNotifier<int>(0);
   final volume = ValueNotifier<int>(127);
   final sustainOn = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> initialized = ValueNotifier<bool>(false);
+  final masterGain = ValueNotifier<double>(1.0);
+  final pitchBendValue = ValueNotifier<double>(8192);
+  final bendRange = ValueNotifier<int>(2);
+  final sessionMixWithOthers = ValueNotifier<bool>(true);
+  final reverbOn = ValueNotifier<bool>(false);
+  final reverbRoomSize = ValueNotifier<double>(0.4);
+  final chorusOn = ValueNotifier<bool>(false);
+  final eqOn = ValueNotifier<bool>(false);
+  final eqBass = ValueNotifier<double>(0);
+  final eqTreble = ValueNotifier<double>(0);
+  final delayOn = ValueNotifier<bool>(false);
+  final distortionOn = ValueNotifier<bool>(false);
   Map<int, NoteModel> pointerAndNote = {};
+
+  /// Must match the plugin's Android idle shutdown delay: after dispose the
+  /// audio stream stays warm this long before it is actually closed.
+  static const Duration idleShutdownDelay = Duration(seconds: 30);
+
+  /// null = hidden, 0.0-1.0 = countdown to the real audio stream close.
+  final ValueNotifier<double?> shutdownProgress = ValueNotifier<double?>(null);
+  final ValueNotifier<bool> streamClosed = ValueNotifier<bool>(false);
+  Timer? shutdownTimer;
+
+  @override
+  void dispose() {
+    shutdownTimer?.cancel();
+    midiPollTimer?.cancel();
+    if (midiPro.isInitialized) midiPro.dispose();
+    super.dispose();
+  }
+
+  void startShutdownCountdown() {
+    shutdownTimer?.cancel();
+    streamClosed.value = false;
+    shutdownProgress.value = 0;
+    final started = DateTime.now();
+    shutdownTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      final elapsed = DateTime.now().difference(started);
+      if (elapsed >= idleShutdownDelay) {
+        timer.cancel();
+        shutdownProgress.value = null;
+        streamClosed.value = true;
+      } else {
+        shutdownProgress.value = elapsed.inMilliseconds / idleShutdownDelay.inMilliseconds;
+      }
+    });
+  }
+
+  void cancelShutdownCountdown() {
+    shutdownTimer?.cancel();
+    shutdownProgress.value = null;
+    streamClosed.value = false;
+  }
+
+  final midiLoaded = ValueNotifier<bool>(false);
+  final midiTempo = ValueNotifier<double>(1.0);
+  final midiState = ValueNotifier<MidiPlayerState?>(null);
+  Timer? midiPollTimer;
+
+  /// Builds a minimal format-0 Standard MIDI File in memory: a C major scale
+  /// up and down in quarter notes at 120 BPM on channel 0.
+  Uint8List buildDemoMidi() {
+    final track = <int>[];
+    void event(int delta, List<int> bytes) {
+      if (delta > 0x7F) track.add(0x80 | (delta >> 7));
+      track.add(delta & 0x7F);
+      track.addAll(bytes);
+    }
+
+    const notes = [60, 62, 64, 65, 67, 69, 71, 72, 71, 69, 67, 65, 64, 62, 60];
+    event(0, [0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20]); // tempo: 500000 us/quarter = 120 BPM
+    for (final note in notes) {
+      event(0, [0x90, note, 100]);
+      event(480, [0x80, note, 0]);
+    }
+    event(0, [0xFF, 0x2F, 0x00]); // end of track
+    return Uint8List.fromList([
+      0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xE0, // MThd: format 0, 1 track, 480 PPQ
+      0x4D, 0x54, 0x72, 0x6B, // MTrk
+      (track.length >> 24) & 0xFF, (track.length >> 16) & 0xFF,
+      (track.length >> 8) & 0xFF, track.length & 0xFF,
+      ...track,
+    ]);
+  }
+
+  Future<void> loadDemoMidi(int sfId) async {
+    await midiPro.loadMidiData(data: buildDemoMidi(), sfId: sfId);
+    midiLoaded.value = true;
+    midiTempo.value = 1.0;
+    midiPollTimer?.cancel();
+    midiPollTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
+      if (!midiPro.isInitialized) return;
+      midiState.value = await midiPro.getMidiPlayerState();
+    });
+  }
+
+  void resetMidiPlayerUi() {
+    midiPollTimer?.cancel();
+    midiLoaded.value = false;
+    midiState.value = null;
+    midiTempo.value = 1.0;
+  }
+
+  /// Lists the presets inside a loaded soundfont and selects the tapped one.
+  /// [context] must be below the MaterialApp (e.g. the tapped button's
+  /// context) — this State's own context is above it and has no
+  /// MaterialLocalizations.
+  Future<void> showPresetPicker(BuildContext context, int sfId) async {
+    final presets = await midiPro.getPresets(sfId);
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text('Presets in soundfont $sfId'),
+        children: [
+          for (final preset in presets)
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(context);
+                if (preset.bank < 128) {
+                  bankIndex.value = preset.bank;
+                  instrumentIndex.value = preset.program;
+                }
+                selectInstrument(
+                  sfId: sfId,
+                  program: preset.program,
+                  bank: preset.bank,
+                  channel: channelIndex.value,
+                );
+              },
+              child: Text('${preset.bank}:${preset.program}  ${preset.name}'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Initializes the synthesizer. Must be called before loading soundfonts.
+  Future<void> initMidi() async {
+    await midiPro.init();
+    initialized.value = true;
+    // A new init reuses the warm audio stream, so the pending close is off.
+    cancelShutdownCountdown();
+  }
+
+  /// Disposes the synthesizer. All soundfonts are unloaded.
+  Future<void> disposeMidi() async {
+    await midiPro.dispose();
+    initialized.value = false;
+    loadedSoundfonts.value = {};
+    selectedSfId.value = null;
+    sustainOn.value = false;
+    masterGain.value = 1.0;
+    pitchBendValue.value = 8192;
+    bendRange.value = 2;
+    reverbOn.value = false;
+    reverbRoomSize.value = 0.4;
+    chorusOn.value = false;
+    eqOn.value = false;
+    eqBass.value = 0;
+    eqTreble.value = 0;
+    delayOn.value = false;
+    distortionOn.value = false;
+    pointerAndNote.clear();
+    resetMidiPlayerUi();
+    startShutdownCountdown();
+  }
+
+  /// configureAudioSession is iOS-only (no-op elsewhere) and can be called at
+  /// any time, also before init().
+  Future<void> applyAudioSession() async {
+    await midiPro.configureAudioSession(
+      category: AudioSessionCategory.playback,
+      mixWithOthers: sessionMixWithOthers.value,
+    );
+  }
+
+  Future<void> applyReverb() => midiPro.setReverb(
+        enabled: reverbOn.value,
+        roomSize: reverbRoomSize.value,
+      );
+
+  Future<void> applyEqualizer() => midiPro.setEqualizer(
+        enabled: eqOn.value,
+        bassGain: eqBass.value,
+        trebleGain: eqTreble.value,
+      );
 
   /// Loads a soundfont file from the specified path.
   /// Returns the soundfont ID.
@@ -109,22 +299,344 @@ class _MyAppState extends State<MyApp> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   const SizedBox(height: 10),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        sf2Paths.length,
-                        (index) => ElevatedButton(
-                          onPressed: () => loadSoundfont(
-                            sf2Paths[index],
-                            bankIndex.value,
-                            instrumentIndex.value,
+                  ValueListenableBuilder(
+                    valueListenable: initialized,
+                    builder: (context, initializedValue, child) {
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.power_settings_new),
+                            onPressed: initializedValue ? null : initMidi,
+                            label: const Text('Init MidiPro'),
                           ),
-                          child: Text('Load Soundfont ${sf2Paths[index]}'),
+                          const SizedBox(width: 10),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.power_off_outlined),
+                            onPressed: initializedValue ? disposeMidi : null,
+                            label: const Text('Dispose MidiPro'),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  ValueListenableBuilder(
+                    valueListenable: shutdownProgress,
+                    builder: (context, progress, child) {
+                      if (progress == null) {
+                        return ValueListenableBuilder(
+                          valueListenable: streamClosed,
+                          builder: (context, closed, child) {
+                            if (!closed) return const SizedBox.shrink();
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                              child: Text(
+                                'Audio stream closed. If you heard a pop just now, '
+                                'it came from the stream closing.',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            );
+                          },
+                        );
+                      }
+                      final remaining =
+                          (idleShutdownDelay.inSeconds * (1 - progress)).ceil();
+                      return Tooltip(
+                        triggerMode: TooltipTriggerMode.tap,
+                        showDuration: const Duration(seconds: 8),
+                        message:
+                            'After dispose, the plugin keeps the Android audio stream '
+                            'open for ~${idleShutdownDelay.inSeconds} s and reuses it if '
+                            'you init again, because closing/reopening the stream can pop '
+                            'on some devices. When this bar completes, the stream really '
+                            'closes — listen for a pop at that exact moment.',
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          child: Row(
+                            children: [
+                              Expanded(child: LinearProgressIndicator(value: progress)),
+                              const SizedBox(width: 10),
+                              Text('Stream closes in ${remaining}s',
+                                  style: const TextStyle(fontSize: 12)),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.info_outline, size: 16),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  ValueListenableBuilder(
+                    valueListenable: initialized,
+                    builder: (context, initializedValue, child) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        child: Row(
+                          children: [
+                            const Text('Master Gain: '),
+                            Expanded(
+                              child: ValueListenableBuilder(
+                                valueListenable: masterGain,
+                                builder: (context, gainValue, child) {
+                                  return Slider(
+                                    value: gainValue,
+                                    min: 0,
+                                    max: 2,
+                                    onChanged: initializedValue
+                                        ? (value) {
+                                            masterGain.value = value;
+                                            midiPro.setMasterGain(value);
+                                          }
+                                        : null,
+                                  );
+                                },
+                              ),
+                            ),
+                            ValueListenableBuilder(
+                              valueListenable: masterGain,
+                              builder: (context, gainValue, child) =>
+                                  Text(gainValue.toStringAsFixed(2)),
+                            ),
+                            const SizedBox(width: 10),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.warning_amber),
+                              onPressed: initializedValue ? () => midiPro.panic() : null,
+                              label: const Text('Panic'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  ValueListenableBuilder(
+                    valueListenable: sessionMixWithOthers,
+                    builder: (context, mixValue, child) {
+                      return SwitchListTile(
+                        dense: true,
+                        title: const Text('Mix with background audio'),
+                        subtitle: const Text(
+                            'configureAudioSession — iOS only (no-op on Android/macOS). '
+                            'Keeps other apps\' music playing and survives video/ad '
+                            'audio session takeovers.'),
+                        value: mixValue,
+                        onChanged: (value) {
+                          sessionMixWithOthers.value = value;
+                          applyAudioSession();
+                        },
+                      );
+                    },
+                  ),
+                  ValueListenableBuilder(
+                    valueListenable: initialized,
+                    builder: (context, initializedValue, child) {
+                      return ExpansionTile(
+                        title: const Text('Effects'),
+                        subtitle: const Text(
+                            'Reverb: all platforms • Chorus: Android only • '
+                            'EQ/Delay/Distortion: iOS/macOS only'),
+                        children: [
+                          ValueListenableBuilder(
+                            valueListenable: reverbOn,
+                            builder: (context, reverbValue, child) {
+                              return Column(
+                                children: [
+                                  SwitchListTile(
+                                    dense: true,
+                                    title: const Text('Reverb'),
+                                    subtitle: const Text(
+                                        'Android: FluidSynth (all parameters) • '
+                                        'iOS/macOS: preset + level'),
+                                    value: reverbValue,
+                                    onChanged: initializedValue
+                                        ? (value) {
+                                            reverbOn.value = value;
+                                            applyReverb();
+                                          }
+                                        : null,
+                                  ),
+                                  if (reverbValue)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                                      child: Row(
+                                        children: [
+                                          const Text('Room size: '),
+                                          Expanded(
+                                            child: ValueListenableBuilder(
+                                              valueListenable: reverbRoomSize,
+                                              builder: (context, roomValue, child) {
+                                                return Slider(
+                                                  value: roomValue,
+                                                  min: 0,
+                                                  max: 1,
+                                                  onChanged: (value) {
+                                                    reverbRoomSize.value = value;
+                                                    applyReverb();
+                                                  },
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          ValueListenableBuilder(
+                            valueListenable: chorusOn,
+                            builder: (context, chorusValue, child) {
+                              return SwitchListTile(
+                                dense: true,
+                                title: const Text('Chorus'),
+                                subtitle: const Text('Android only (FluidSynth built-in)'),
+                                value: chorusValue,
+                                onChanged: initializedValue
+                                    ? (value) {
+                                        chorusOn.value = value;
+                                        midiPro.setChorus(enabled: value);
+                                      }
+                                    : null,
+                              );
+                            },
+                          ),
+                          ValueListenableBuilder(
+                            valueListenable: eqOn,
+                            builder: (context, eqValue, child) {
+                              return Column(
+                                children: [
+                                  SwitchListTile(
+                                    dense: true,
+                                    title: const Text('Equalizer (bass/treble)'),
+                                    subtitle: const Text('iOS/macOS only'),
+                                    value: eqValue,
+                                    onChanged: initializedValue
+                                        ? (value) {
+                                            eqOn.value = value;
+                                            applyEqualizer();
+                                          }
+                                        : null,
+                                  ),
+                                  if (eqValue)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Text('Bass: '),
+                                              Expanded(
+                                                child: ValueListenableBuilder(
+                                                  valueListenable: eqBass,
+                                                  builder: (context, bassValue, child) {
+                                                    return Slider(
+                                                      value: bassValue,
+                                                      min: -24,
+                                                      max: 24,
+                                                      onChanged: (value) {
+                                                        eqBass.value = value;
+                                                        applyEqualizer();
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            children: [
+                                              const Text('Treble: '),
+                                              Expanded(
+                                                child: ValueListenableBuilder(
+                                                  valueListenable: eqTreble,
+                                                  builder: (context, trebleValue, child) {
+                                                    return Slider(
+                                                      value: trebleValue,
+                                                      min: -24,
+                                                      max: 24,
+                                                      onChanged: (value) {
+                                                        eqTreble.value = value;
+                                                        applyEqualizer();
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                          ValueListenableBuilder(
+                            valueListenable: delayOn,
+                            builder: (context, delayValue, child) {
+                              return SwitchListTile(
+                                dense: true,
+                                title: const Text('Delay (echo)'),
+                                subtitle: const Text('iOS/macOS only'),
+                                value: delayValue,
+                                onChanged: initializedValue
+                                    ? (value) {
+                                        delayOn.value = value;
+                                        midiPro.setDelay(enabled: value);
+                                      }
+                                    : null,
+                              );
+                            },
+                          ),
+                          ValueListenableBuilder(
+                            valueListenable: distortionOn,
+                            builder: (context, distortionValue, child) {
+                              return SwitchListTile(
+                                dense: true,
+                                title: const Text('Distortion'),
+                                subtitle: const Text('iOS/macOS only'),
+                                value: distortionValue,
+                                onChanged: initializedValue
+                                    ? (value) {
+                                        distortionOn.value = value;
+                                        midiPro.setDistortion(
+                                          enabled: value,
+                                          preset: DistortionPreset.multiDistortedFunk,
+                                        );
+                                      }
+                                    : null,
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  ValueListenableBuilder(
+                    valueListenable: initialized,
+                    builder: (context, initializedValue, child) {
+                      return FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            sf2Paths.length,
+                            (index) => ElevatedButton(
+                              onPressed: initializedValue
+                                  ? () => loadSoundfont(
+                                      sf2Paths[index],
+                                      bankIndex.value,
+                                      instrumentIndex.value,
+                                    )
+                                  : null,
+                              child: Text('Load Soundfont ${sf2Paths[index]}'),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   ValueListenableBuilder(
@@ -154,6 +666,11 @@ class _MyAppState extends State<MyApp> {
                                         ),
                                       );
                                     },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.list_alt),
+                                    tooltip: 'List presets',
+                                    onPressed: () => showPresetPicker(context, entry.key),
                                   ),
                                   ElevatedButton(
                                     onPressed: () => unloadSoundfont(entry.key),
@@ -326,6 +843,173 @@ class _MyAppState extends State<MyApp> {
                               ],
                             ),
                           ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
+                            child: Row(
+                              children: [
+                                const Text('Pitch Bend: '),
+                                Expanded(
+                                  child: ValueListenableBuilder(
+                                    valueListenable: pitchBendValue,
+                                    builder: (context, bendValue, child) {
+                                      return Slider(
+                                        value: bendValue,
+                                        min: 0,
+                                        max: 16383,
+                                        onChanged: selectedSfIdValue != null
+                                            ? (value) {
+                                                pitchBendValue.value = value;
+                                                midiPro.pitchBend(
+                                                  value: value.toInt(),
+                                                  channel: channelIndex.value,
+                                                  sfId: selectedSfIdValue,
+                                                );
+                                              }
+                                            : null,
+                                        onChangeEnd: selectedSfIdValue != null
+                                            ? (value) {
+                                                // Spring back to center like a real pitch wheel.
+                                                pitchBendValue.value = 8192;
+                                                midiPro.pitchBend(
+                                                  value: 8192,
+                                                  channel: channelIndex.value,
+                                                  sfId: selectedSfIdValue,
+                                                );
+                                              }
+                                            : null,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                ValueListenableBuilder(
+                                  valueListenable: bendRange,
+                                  builder: (context, bendRangeValue, child) {
+                                    return DropdownButton<int>(
+                                      value: bendRangeValue,
+                                      items: [
+                                        for (final semitones in [1, 2, 5, 12, 24])
+                                          DropdownMenuItem<int>(
+                                            value: semitones,
+                                            child: Text(
+                                              '±$semitones st',
+                                              style: const TextStyle(fontSize: 13),
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged: selectedSfIdValue != null
+                                          ? (value) {
+                                              if (value != null) {
+                                                bendRange.value = value;
+                                                midiPro.setPitchBendRange(
+                                                  semitones: value,
+                                                  channel: channelIndex.value,
+                                                  sfId: selectedSfIdValue,
+                                                );
+                                              }
+                                            }
+                                          : null,
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Divider(),
+                          const Text('MIDI File Player (Android only for now)'),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              ElevatedButton(
+                                onPressed: selectedSfIdValue != null
+                                    ? () => loadDemoMidi(selectedSfIdValue)
+                                    : null,
+                                child: const Text('Load Demo MIDI'),
+                              ),
+                              ValueListenableBuilder(
+                                valueListenable: midiLoaded,
+                                builder: (context, loaded, child) {
+                                  return Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.play_arrow),
+                                        tooltip: 'Play',
+                                        onPressed: loaded ? () => midiPro.playMidi() : null,
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.pause),
+                                        tooltip: 'Pause',
+                                        onPressed: loaded ? () => midiPro.pauseMidi() : null,
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.stop),
+                                        tooltip: 'Stop and rewind',
+                                        onPressed: loaded ? () => midiPro.stopMidi() : null,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          ValueListenableBuilder(
+                            valueListenable: midiLoaded,
+                            builder: (context, loaded, child) {
+                              if (!loaded) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 18),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('Tempo: '),
+                                        Expanded(
+                                          child: ValueListenableBuilder(
+                                            valueListenable: midiTempo,
+                                            builder: (context, tempo, child) {
+                                              return Slider(
+                                                value: tempo,
+                                                min: 0.25,
+                                                max: 2.0,
+                                                onChanged: (value) {
+                                                  midiTempo.value = value;
+                                                  midiPro.setMidiTempo(value);
+                                                },
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        ValueListenableBuilder(
+                                          valueListenable: midiTempo,
+                                          builder: (context, tempo, child) =>
+                                              Text('${tempo.toStringAsFixed(2)}x'),
+                                        ),
+                                      ],
+                                    ),
+                                    ValueListenableBuilder(
+                                      valueListenable: midiState,
+                                      builder: (context, state, child) {
+                                        return Row(
+                                          children: [
+                                            Expanded(
+                                              child: LinearProgressIndicator(
+                                                value: state?.progress ?? 0,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              '${state?.bpm ?? 0} BPM',
+                                              style: const TextStyle(fontSize: 12),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                          const Divider(),
                           Padding(
                             padding: const EdgeInsets.all(8),
                             child: ElevatedButton.icon(

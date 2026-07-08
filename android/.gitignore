@@ -7,3 +7,7 @@
 /build
 /captures
 .cxx
+
+# FluidSynth binaries are downloaded at build time (see build.gradle); a
+# local vendored copy for offline builds must not be committed.
+/src/main/cpp/fluidsynth/

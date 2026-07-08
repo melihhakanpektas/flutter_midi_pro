@@ -1,6 +1,7 @@
 # Ignore "example" folder
 example/
 
-# Exclude 32-bit x86 native libs from the published package
-# (keeps x86_64 intact). Paths are relative to package root.
-android/src/main/cpp/fluidsynth/lib/x86/**
+# The FluidSynth binaries are no longer part of the repo/package; they are
+# downloaded at build time by android/build.gradle. A local vendored copy
+# (used for offline builds) must not be published either.
+android/src/main/cpp/fluidsynth/**
