@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_midi_pro/flutter_midi_pro.dart';
 import 'package:flutter_piano_pro/flutter_piano_pro.dart';
@@ -104,7 +104,20 @@ class _MyAppState extends State<MyApp> {
     }
     event(0, [0xFF, 0x2F, 0x00]); // end of track
     return Uint8List.fromList([
-      0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xE0, // MThd: format 0, 1 track, 480 PPQ
+      0x4D,
+      0x54,
+      0x68,
+      0x64,
+      0,
+      0,
+      0,
+      6,
+      0,
+      0,
+      0,
+      1,
+      0x01,
+      0xE0, // MThd: format 0, 1 track, 480 PPQ
       0x4D, 0x54, 0x72, 0x6B, // MTrk
       (track.length >> 24) & 0xFF, (track.length >> 16) & 0xFF,
       (track.length >> 8) & 0xFF, track.length & 0xFF,
@@ -204,22 +217,19 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
-  Future<void> applyReverb() => midiPro.setReverb(
-        enabled: reverbOn.value,
-        roomSize: reverbRoomSize.value,
-      );
+  Future<void> applyReverb() =>
+      midiPro.setReverb(enabled: reverbOn.value, roomSize: reverbRoomSize.value);
 
-  Future<void> applyEqualizer() => midiPro.setEqualizer(
-        enabled: eqOn.value,
-        bassGain: eqBass.value,
-        trebleGain: eqTreble.value,
-      );
+  Future<void> applyEqualizer() =>
+      midiPro.setEqualizer(enabled: eqOn.value, bassGain: eqBass.value, trebleGain: eqTreble.value);
 
   /// Loads a soundfont file from the specified path.
   /// Returns the soundfont ID.
   Future<int> loadSoundfont(String path, int bank, int program) async {
     if (loadedSoundfonts.value.containsValue(path)) {
-      print('Soundfont file: $path already loaded. Returning ID.');
+      if (kDebugMode) {
+        print('Soundfont file: $path already loaded. Returning ID.');
+      }
       return loadedSoundfonts.value.entries.firstWhere((element) => element.value == path).key;
     }
     final int sfId = await midiPro.loadSoundfontAsset(
@@ -228,7 +238,9 @@ class _MyAppState extends State<MyApp> {
       program: program,
     );
     loadedSoundfonts.value = {sfId: path, ...loadedSoundfonts.value};
-    print('Loaded soundfont file: $path with ID: $sfId');
+    if (kDebugMode) {
+      print('Loaded soundfont file: $path with ID: $sfId');
+    }
     return sfId;
   }
 
@@ -245,7 +257,9 @@ class _MyAppState extends State<MyApp> {
     } else {
       selectedSfId.value = sfId;
     }
-    print('Selected soundfont file: $sfIdValue');
+    if (kDebugMode) {
+      print('Selected soundfont file: $sfIdValue');
+    }
     await midiPro.selectInstrument(sfId: sfIdValue, channel: channel, bank: bank, program: program);
   }
 
@@ -339,8 +353,7 @@ class _MyAppState extends State<MyApp> {
                           },
                         );
                       }
-                      final remaining =
-                          (idleShutdownDelay.inSeconds * (1 - progress)).ceil();
+                      final remaining = (idleShutdownDelay.inSeconds * (1 - progress)).ceil();
                       return Tooltip(
                         triggerMode: TooltipTriggerMode.tap,
                         showDuration: const Duration(seconds: 8),
@@ -356,8 +369,10 @@ class _MyAppState extends State<MyApp> {
                             children: [
                               Expanded(child: LinearProgressIndicator(value: progress)),
                               const SizedBox(width: 10),
-                              Text('Stream closes in ${remaining}s',
-                                  style: const TextStyle(fontSize: 12)),
+                              Text(
+                                'Stream closes in ${remaining}s',
+                                style: const TextStyle(fontSize: 12),
+                              ),
                               const SizedBox(width: 4),
                               const Icon(Icons.info_outline, size: 16),
                             ],
@@ -416,9 +431,10 @@ class _MyAppState extends State<MyApp> {
                         dense: true,
                         title: const Text('Mix with background audio'),
                         subtitle: const Text(
-                            'configureAudioSession — iOS only (no-op on Android/macOS). '
-                            'Keeps other apps\' music playing and survives video/ad '
-                            'audio session takeovers.'),
+                          'configureAudioSession — iOS only (no-op on Android/macOS). '
+                          'Keeps other apps\' music playing and survives video/ad '
+                          'audio session takeovers.',
+                        ),
                         value: mixValue,
                         onChanged: (value) {
                           sessionMixWithOthers.value = value;
@@ -433,8 +449,9 @@ class _MyAppState extends State<MyApp> {
                       return ExpansionTile(
                         title: const Text('Effects'),
                         subtitle: const Text(
-                            'Reverb: all platforms • Chorus: Android only • '
-                            'EQ/Delay/Distortion: iOS/macOS only'),
+                          'Reverb: all platforms • Chorus: Android only • '
+                          'EQ/Delay/Distortion: iOS/macOS only',
+                        ),
                         children: [
                           ValueListenableBuilder(
                             valueListenable: reverbOn,
@@ -445,8 +462,9 @@ class _MyAppState extends State<MyApp> {
                                     dense: true,
                                     title: const Text('Reverb'),
                                     subtitle: const Text(
-                                        'Android: FluidSynth (all parameters) • '
-                                        'iOS/macOS: preset + level'),
+                                      'Android: FluidSynth (all parameters) • '
+                                      'iOS/macOS: preset + level',
+                                    ),
                                     value: reverbValue,
                                     onChanged: initializedValue
                                         ? (value) {
@@ -1082,7 +1100,7 @@ class _MyAppState extends State<MyApp> {
                               if (selectedSfIdValue == null)
                                 Positioned.fill(
                                   child: Container(
-                                    color: Colors.black.withOpacity(0.5),
+                                    color: Colors.black.withValues(alpha: 0.5),
                                     child: const Center(
                                       child: Text(
                                         'Load Soundfont file\nMust be called before other methods',
