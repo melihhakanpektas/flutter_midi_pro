@@ -125,3 +125,7 @@
 ## 4.0.3
 
 - Readme updated to point to the new example directory.
+
+## 4.0.4
+
+- [#56](https://github.com/melihhakanpektas/flutter_midi_pro/issues/56) fix.
