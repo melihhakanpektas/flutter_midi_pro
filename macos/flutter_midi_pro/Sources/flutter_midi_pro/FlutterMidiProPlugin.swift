@@ -52,40 +52,10 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   }
 
   private func setupAudioSessionNotifications() {
-    // On macOS interruptions are essentially theoretical, but keep parity.
-    // AVAudioSession is available on macOS 10.15+
-    if #available(macOS 10.15, *) {
-      NotificationCenter.default.addObserver(
-        self,
-        selector: #selector(handleAudioSessionInterruption),
-        name: AVAudioSession.interruptionNotification,
-        object: AVAudioSession.sharedInstance()
-      )
-    }
-  }
-
-  @objc private func handleAudioSessionInterruption(notification: Notification) {
-    guard let userInfo = notification.userInfo,
-          let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
-          let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
-      return
-    }
-
-    switch type {
-    case .began:
-      break
-    case .ended:
-      var shouldResume = true
-      if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
-        let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
-        shouldResume = options.contains(.shouldResume)
-      }
-      if shouldResume {
-        restartEngineIfNeeded()
-      }
-    @unknown default:
-      break
-    }
+    // No-op on macOS: AVAudioSession — and its interruption notifications — is an
+    // iOS/tvOS/watchOS-only API and does not exist on the desktop. The macOS
+    // analog (output-device / format changes) is handled by the
+    // AVAudioEngineConfigurationChange observer installed during engine setup.
   }
 
   /// Output device/format changed: the engine stops and must be restarted

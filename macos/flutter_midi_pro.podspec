@@ -14,7 +14,8 @@ A new Flutter plugin project.
   s.author           = { 'Your Company' => 'email@example.com' }
 
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'flutter_midi_pro/Sources/flutter_midi_pro/**/*.swift'
+  s.resource_bundles = {'flutter_midi_pro_privacy' => ['flutter_midi_pro/Sources/flutter_midi_pro/PrivacyInfo.xcprivacy']}
   s.dependency 'FlutterMacOS'
 
   s.platform = :osx, '10.11'
