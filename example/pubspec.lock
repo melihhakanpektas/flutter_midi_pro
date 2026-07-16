@@ -84,7 +84,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "3.1.7"
+    version: "4.0.4"
   flutter_piano_pro:
     dependency: "direct main"
     description:

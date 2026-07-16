@@ -135,6 +135,12 @@ bool createEngine() {
     // The synth is silent at this point, so the one-time stream open is clean.
     fluid_settings_setstr(gSettings, "audio.driver", "oboe");
     fluid_settings_setstr(gSettings, "audio.oboe.performance-mode", "LowLatency");
+    // Stream disconnect recovery: when the OS reclaims the audio stream
+    // (backgrounding, headphone/route change, emulator reclaiming the device)
+    // the oboe driver reopens and restarts the stream instead of going silent.
+    // "Reconnect" is FluidSynth's default, but set it explicitly so playback
+    // keeps self-healing regardless of the bundled FluidSynth version.
+    fluid_settings_setstr(gSettings, "audio.oboe.error-recovery-mode", "Reconnect");
     gDriver = new_fluid_audio_driver(gSettings, gSynth);
     if (gDriver == nullptr) {
         fluid_settings_setstr(gSettings, "audio.driver", "opensles");
