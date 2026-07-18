@@ -152,7 +152,7 @@ await midiPro.setDistortion(enabled: true, preset: DistortionPreset.multiDistort
 
 ## Example
 
-You can find a complete example in the [example](https://github.com/melihhakanpektas/flutter_midi_pro/tree/main/example) directory — an interactive playground covering the full lifecycle (init/dispose), soundfont loading, an instrument picker built on `getPresets`, a piano with pitch bend, master gain, effects and the MIDI file player.
+You can find a complete example in the [example](https://github.com/melihhakanpektas/flutter_midi_pro/tree/master/example) directory — an interactive playground covering the full lifecycle (init/dispose), soundfont loading, an instrument picker built on `getPresets`, a piano with pitch bend, master gain, effects and the MIDI file player.
 
 ## Contributions
 
@@ -168,4 +168,4 @@ Thank you for contributing to flutter_midi_pro!
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](https://github.com/MelihHakanPektas/flutter_midi_pro/blob/main/LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/MelihHakanPektas/flutter_midi_pro/blob/master/LICENSE) file for details.
