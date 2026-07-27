@@ -384,6 +384,94 @@ class MidiPro {
     return FlutterMidiProPlatform.instance.stopAllNotes(sfId);
   }
 
+  /// Starts (replacing any running one) a repeating metronome/pattern loop
+  /// timed entirely by a native background thread — independent of the Dart
+  /// isolate and platform-channel round-trips, both of which jitter when the
+  /// host UI thread is busy (audible as tempo drift in latency-sensitive UIs
+  /// like a metronome or calibration flow).
+  ///
+  /// [offsetsUs] are onset times within one measure, in microseconds from the
+  /// measure start (supports uneven groupings, e.g. an aksak 2+3 measure);
+  /// [accents] marks which of those onsets play [accentKey] instead of [key];
+  /// [measureUs] is the measure length in microseconds. Each onset sounds for
+  /// [tickUs] microseconds. Runs until [stopPatternLoop] is called.
+  ///
+  /// Returns `true` if the native scheduler accepted the loop, `false` if this
+  /// platform has no native scheduler (currently iOS/macOS) — callers should
+  /// keep a Dart-timer-based fallback for that case.
+  Future<bool> startPatternLoop({
+    required List<int> offsetsUs,
+    required List<bool> accents,
+    required int measureUs,
+    int channel = 0,
+    required int key,
+    int? accentKey,
+    int velocity = 110,
+    required int tickUs,
+    int sfId = 1,
+  }) async {
+    _ensureInitialized();
+    try {
+      await FlutterMidiProPlatform.instance.startPatternLoop(
+        offsetsUs: offsetsUs,
+        accents: accents,
+        measureUs: measureUs,
+        channel: channel,
+        key: key,
+        accentKey: accentKey ?? key,
+        velocity: velocity,
+        tickUs: tickUs,
+        sfId: sfId,
+      );
+      return true;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Stops a loop started by [startPatternLoop]. No-op if none is running or
+  /// on platforms without a native scheduler.
+  Future<void> stopPatternLoop() async {
+    _ensureInitialized();
+    try {
+      await FlutterMidiProPlatform.instance.stopPatternLoop();
+    } on MissingPluginException {
+      // No native scheduler on this platform; nothing to stop.
+    }
+  }
+
+  /// Schedules a single note [delayUs] microseconds from now, held for
+  /// [durationUs] microseconds, entirely on the native side — no Dart Timer /
+  /// platform-channel dependency. Useful for stimulus playback and
+  /// latency-measurement probe tones where the exact onset instant matters.
+  ///
+  /// Returns `true` if the native scheduler accepted the note, `false` if this
+  /// platform has no native scheduler (currently iOS/macOS) — callers should
+  /// fall back to [playNote] + a Dart-timer-based stopNote for that case.
+  Future<bool> scheduleNote({
+    required int delayUs,
+    int channel = 0,
+    required int key,
+    int velocity = 110,
+    required int durationUs,
+    int sfId = 1,
+  }) async {
+    _ensureInitialized();
+    try {
+      await FlutterMidiProPlatform.instance.scheduleNote(
+        delayUs: delayUs,
+        channel: channel,
+        key: key,
+        velocity: velocity,
+        durationUs: durationUs,
+        sfId: sfId,
+      );
+      return true;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// Sends a MIDI Control Change (CC) message to the specified channel on a soundfont.
   /// [controller] is the CC number (0-127), [value] is the CC value (0-127).
   Future<void> controlChange({

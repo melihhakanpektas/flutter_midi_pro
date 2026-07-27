@@ -46,6 +46,55 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
+  Future<void> startPatternLoop({
+    required List<int> offsetsUs,
+    required List<bool> accents,
+    required int measureUs,
+    required int channel,
+    required int key,
+    required int accentKey,
+    required int velocity,
+    required int tickUs,
+    required int sfId,
+  }) async {
+    await _channel.invokeMethod('startPatternLoop', {
+      'offsetsUs': offsetsUs,
+      'accents': accents,
+      'measureUs': measureUs,
+      'channel': channel,
+      'key': key,
+      'accentKey': accentKey,
+      'velocity': velocity,
+      'tickUs': tickUs,
+      'sfId': sfId,
+    });
+  }
+
+  @override
+  Future<void> stopPatternLoop() async {
+    await _channel.invokeMethod('stopPatternLoop');
+  }
+
+  @override
+  Future<void> scheduleNote({
+    required int delayUs,
+    required int channel,
+    required int key,
+    required int velocity,
+    required int durationUs,
+    required int sfId,
+  }) async {
+    await _channel.invokeMethod('scheduleNote', {
+      'delayUs': delayUs,
+      'channel': channel,
+      'key': key,
+      'velocity': velocity,
+      'durationUs': durationUs,
+      'sfId': sfId,
+    });
+  }
+
+  @override
   Future<void> controlChange(int sfId, int channel, int controller, int value) async {
     await _channel.invokeMethod('controlChange', {
       'sfId': sfId,

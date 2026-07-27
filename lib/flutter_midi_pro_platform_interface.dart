@@ -38,6 +38,51 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('stopAllNotes() has not been implemented.');
   }
 
+  /// Starts (replacing any running one) a repeating metronome/pattern loop
+  /// entirely on a native background thread with a monotonic clock —
+  /// independent of the Dart isolate and platform-channel round-trips, which
+  /// jitter when the host UI thread is busy. [offsetsUs] are onset times
+  /// within one measure (microseconds from the measure start; supports
+  /// uneven groupings, e.g. aksak 2+3), [accents] marks which onsets use
+  /// [accentKey] instead of [key], [measureUs] is the measure length. Each
+  /// onset is held for [tickUs] then released. Runs until [stopPatternLoop].
+  ///
+  /// Falls back silently (does nothing) on platforms without a native
+  /// implementation — callers should keep their existing Dart-timer-based
+  /// path as a fallback (see package README).
+  Future<void> startPatternLoop({
+    required List<int> offsetsUs,
+    required List<bool> accents,
+    required int measureUs,
+    required int channel,
+    required int key,
+    required int accentKey,
+    required int velocity,
+    required int tickUs,
+    required int sfId,
+  }) {
+    throw UnimplementedError('startPatternLoop() has not been implemented.');
+  }
+
+  Future<void> stopPatternLoop() {
+    throw UnimplementedError('stopPatternLoop() has not been implemented.');
+  }
+
+  /// Schedules a single note [delayUs] from now, held for [durationUs],
+  /// entirely on the native side — no Dart Timer / platform-channel
+  /// dependency. Useful for stimulus playback and latency-measurement probe
+  /// tones where the exact onset instant matters more than convenience.
+  Future<void> scheduleNote({
+    required int delayUs,
+    required int channel,
+    required int key,
+    required int velocity,
+    required int durationUs,
+    required int sfId,
+  }) {
+    throw UnimplementedError('scheduleNote() has not been implemented.');
+  }
+
   /// Sends a MIDI Control Change (CC) message to the specified channel on a soundfont.
   /// [controller] is the CC number (0-127), [value] is the CC value (0-127).
   Future<void> controlChange(int sfId, int channel, int controller, int value) {

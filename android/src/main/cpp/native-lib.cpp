@@ -1,10 +1,15 @@
 #include <jni.h>
 #include <fluidsynth.h>
+#include <android/log.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <map>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 // Single shared engine: one settings + synth + audio driver created on first
 // load and kept alive until dispose(). Opening/closing an audio stream per
@@ -194,6 +199,181 @@ double clampDouble(double value, double lo, double hi) {
     return value;
 }
 
+// ---------------------------------------------------------------------------
+// Native scheduler
+// ---------------------------------------------------------------------------
+//
+// Dart-side timing (Timer + platform channel round-trip) is jittery: a Timer
+// firing at the right time does not guarantee the note-on reaches the native
+// side (and therefore the synth) at that instant, because the method channel
+// message is dispatched through the Android main thread, which may be busy
+// (view work, GC, input dispatch). This is most audible in latency
+// calibration, which measures exactly that gap ("tempo speeding up/slowing
+// down" — user report 2026-07-25).
+//
+// The scheduler below runs entirely on its own background thread with a
+// monotonic clock, independent of the Dart isolate and the Android main
+// thread. Two entry points cover every current use case:
+//   - startPatternLoop/stopPatternLoop: a repeating measure of beat offsets
+//     (metronome — calibration's single beat, or rhythm/melody's beat groups
+//     including uneven aksak groupings). Runs until explicitly stopped.
+//   - scheduleNote: a single note-on/note-off at a future instant (rhythm/
+//     melody stimulus playback, latency-calibration probe tones).
+// Both reuse gLock/gSynth for the actual FluidSynth calls, so they interleave
+// safely with the existing synchronous playNote/stopNote JNI calls.
+
+std::mutex gSchedLock;
+std::condition_variable gSchedCv;
+std::atomic<uint64_t> gSchedGeneration{0};
+
+// Android's default thread nice value (0) is subject to the OS scheduler's
+// normal contention/power-saving policies (some OEM skins — e.g. MIUI, the
+// device this bug was reported on — throttle background app threads more
+// aggressively than stock Android). Oboe's own audio callback thread is
+// already boosted by the audio framework, which is why plain note playback
+// never showed this; our scheduler threads are ordinary app threads and get
+// no such boost automatically. -16 matches Android's ANDROID_PRIORITY_AUDIO
+// convention; best-effort only (silently ignored if the OS denies it — no
+// CAP_SYS_NICE on some configurations), but on typical app cpusets a negative
+// nice value is honored without special permission.
+constexpr int kAudioThreadPriority = -16;
+
+void raiseThreadPriority() {
+    setpriority(PRIO_PROCESS, gettid(), kAudioThreadPriority);
+}
+
+// Pattern-loop state (guarded by gSchedLock).
+bool gPatternRunning = false;
+std::thread gPatternThread;
+std::vector<int64_t> gPatternOffsetsUs;
+std::vector<uint8_t> gPatternAccents;
+int64_t gPatternMeasureUs = 0;
+int gPatternChannel = 0;
+int gPatternKey = 0;
+int gPatternAccentKey = 0;
+int gPatternVelocity = 0;
+int64_t gPatternTickUs = 0;
+int gPatternSfId = 0;
+
+void playAndReleaseNote(int channel, int key, int velocity, int sfId, int64_t tickUs, uint64_t myGeneration) {
+    {
+        std::lock_guard<std::mutex> lock(gLock);
+        auto it = gSoundfonts.find(sfId);
+        if (it != gSoundfonts.end() && validChannel(channel)) {
+            fluid_synth_noteon(gSynth, it->second.channelOffset + channel, key, velocity);
+        }
+    }
+    // Short, fixed note-off delay (percussive tick); does not need scheduler
+    // precision — the onset (already played above) is what calibration/tempo
+    // perception cares about. Interruptible so stop doesn't block on it.
+    {
+        std::unique_lock<std::mutex> lock(gSchedLock);
+        gSchedCv.wait_for(lock, std::chrono::microseconds(tickUs),
+                          [myGeneration] { return gSchedGeneration.load() != myGeneration; });
+    }
+    if (gSchedGeneration.load() != myGeneration) return;
+    std::lock_guard<std::mutex> lock(gLock);
+    auto it = gSoundfonts.find(sfId);
+    if (it != gSoundfonts.end() && validChannel(channel)) {
+        fluid_synth_noteoff(gSynth, it->second.channelOffset + channel, key);
+    }
+}
+
+void patternLoopThreadFn(uint64_t myGeneration) {
+    raiseThreadPriority();
+    using clock = std::chrono::steady_clock;
+    const auto start = clock::now();
+    // Local copies (set before the thread starts; safe to read without a lock
+    // for the thread's lifetime since startPatternLoop only mutates them
+    // before spawning a new thread with a new generation).
+    const auto offsets = gPatternOffsetsUs;
+    const auto accents = gPatternAccents;
+    const auto measureUs = gPatternMeasureUs;
+    const int channel = gPatternChannel;
+    const int key = gPatternKey;
+    const int accentKey = gPatternAccentKey;
+    const int velocity = gPatternVelocity;
+    const int64_t tickUs = gPatternTickUs;
+    const int sfId = gPatternSfId;
+    if (offsets.empty() || measureUs <= 0) return;
+
+    uint64_t measureIndex = 0;
+    while (gSchedGeneration.load() == myGeneration) {
+        for (size_t i = 0; i < offsets.size(); i++) {
+            const auto targetTime =
+                start + std::chrono::microseconds(measureIndex * static_cast<uint64_t>(measureUs) + offsets[i]);
+            std::unique_lock<std::mutex> lock(gSchedLock);
+            gSchedCv.wait_until(lock, targetTime,
+                               [myGeneration] { return gSchedGeneration.load() != myGeneration; });
+            if (gSchedGeneration.load() != myGeneration) return;
+            lock.unlock();
+            // Diagnostic only: how late (us) the OS scheduler actually woke this
+            // thread vs. the intended beat instant. If a user reports arrhythmic
+            // playback again, `adb logcat -s MidiProSched` on a >5ms line pinpoints
+            // whether it's still an OS-scheduling problem (vs. a logic bug).
+            const auto lateUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                     clock::now() - targetTime).count();
+            if (lateUs > 5000) {
+                __android_log_print(ANDROID_LOG_WARN, "MidiProSched",
+                                     "pattern beat %zu late by %lldus", i, (long long)lateUs);
+            }
+            const bool accented = i < accents.size() && accents[i];
+            playAndReleaseNote(channel, accented ? accentKey : key, velocity, sfId, tickUs, myGeneration);
+        }
+        measureIndex++;
+    }
+}
+
+// Single scheduled note (fire at [delayUs] from now, auto-release after
+// [durationUs]); used for one-shot stimulus/probe playback so it does not
+// depend on Dart Timer + platform-channel jitter either.
+void scheduledNoteThreadFn(int64_t delayUs, int channel, int key, int velocity, int64_t durationUs,
+                            int sfId, uint64_t myGeneration) {
+    raiseThreadPriority();
+    using clock = std::chrono::steady_clock;
+    const auto targetTime = clock::now() + std::chrono::microseconds(delayUs);
+    {
+        std::unique_lock<std::mutex> lock(gSchedLock);
+        gSchedCv.wait_until(lock, targetTime,
+                           [myGeneration] { return gSchedGeneration.load() != myGeneration; });
+    }
+    if (gSchedGeneration.load() != myGeneration) return;
+    const auto lateUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                             clock::now() - targetTime).count();
+    if (lateUs > 5000) {
+        __android_log_print(ANDROID_LOG_WARN, "MidiProSched",
+                             "scheduled note late by %lldus", (long long)lateUs);
+    }
+    playAndReleaseNote(channel, key, velocity, sfId, durationUs, myGeneration);
+}
+
+// Must be called with gSchedLock held. Stops any running pattern loop and
+// wakes any in-flight scheduledNote waits (they check generation and bail).
+//
+// MUST NOT be called while gLock is held: the pattern/scheduled-note threads
+// briefly acquire gLock (in playAndReleaseNote) before checking gSchedLock/
+// generation, so joining them while holding gLock can deadlock.
+void stopSchedulerLocked(std::unique_lock<std::mutex>& lock) {
+    gSchedGeneration.fetch_add(1);
+    gSchedCv.notify_all();
+    bool wasRunning = gPatternRunning;
+    gPatternRunning = false;
+    lock.unlock();
+    gSchedCv.notify_all();  // wake any thread already past the lock check
+    if (wasRunning && gPatternThread.joinable()) {
+        gPatternThread.join();
+    }
+    lock.lock();
+}
+
+// Public helper: stop the scheduler without requiring gSchedLock to already be
+// held. Callers that also need gLock (dispose/shutdown) MUST call this BEFORE
+// acquiring gLock (see stopSchedulerLocked's deadlock note).
+void stopScheduler() {
+    std::unique_lock<std::mutex> lock(gSchedLock);
+    stopSchedulerLocked(lock);
+}
+
 }  // namespace
 
 extern "C" JNIEXPORT int JNICALL
@@ -281,6 +461,61 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_stopAllNotes(J
         fluid_synth_cc(gSynth, channel, 64, 0);  // Sustain off
         fluid_synth_all_sounds_off(gSynth, channel);  // Instant cut
     }
+}
+
+// Starts (replacing any running one) a repeating pattern loop entirely on a
+// dedicated native thread: [offsetsUs] are onset times within one measure
+// (microseconds from the measure start; supports uneven aksak groupings),
+// [accents] marks which of those onsets use accentKey instead of key,
+// [measureUs] is the measure length. Runs until stopPatternLoop().
+extern "C" JNIEXPORT void JNICALL
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_startPatternLoop(
+    JNIEnv* env, jclass clazz, jlongArray offsetsUs, jbooleanArray accents, jlong measureUs,
+    jint channel, jint key, jint accentKey, jint velocity, jlong tickUs, jint sfId) {
+    const jsize count = env->GetArrayLength(offsetsUs);
+    std::vector<int64_t> offsets(count);
+    std::vector<uint8_t> accentFlags(count);
+    {
+        std::vector<jlong> raw(count);
+        env->GetLongArrayRegion(offsetsUs, 0, count, raw.data());
+        for (jsize i = 0; i < count; i++) offsets[i] = raw[i];
+        std::vector<jboolean> rawAccents(count);
+        env->GetBooleanArrayRegion(accents, 0, count, rawAccents.data());
+        for (jsize i = 0; i < count; i++) accentFlags[i] = rawAccents[i] != 0;
+    }
+
+    stopScheduler();  // join any previous loop before reassigning state
+    std::unique_lock<std::mutex> lock(gSchedLock);
+    gPatternOffsetsUs = std::move(offsets);
+    gPatternAccents = std::move(accentFlags);
+    gPatternMeasureUs = measureUs;
+    gPatternChannel = channel;
+    gPatternKey = key;
+    gPatternAccentKey = accentKey;
+    gPatternVelocity = velocity;
+    gPatternTickUs = tickUs;
+    gPatternSfId = sfId;
+    gPatternRunning = true;
+    const uint64_t myGeneration = gSchedGeneration.load();
+    gPatternThread = std::thread(patternLoopThreadFn, myGeneration);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_stopPatternLoop(JNIEnv* env, jclass clazz) {
+    stopScheduler();
+}
+
+// Schedules a single note [delayUs] from now, held for [durationUs], entirely
+// on a detached native thread (no Dart Timer / platform-channel dependency —
+// used by rhythm/melody stimulus playback and voice-latency probe tones).
+extern "C" JNIEXPORT void JNICALL
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_scheduleNote(
+    JNIEnv* env, jclass clazz, jlong delayUs, jint channel, jint key, jint velocity,
+    jlong durationUs, jint sfId) {
+    const uint64_t myGeneration = gSchedGeneration.load();
+    std::thread(scheduledNoteThreadFn, static_cast<int64_t>(delayUs), channel, key, velocity,
+                static_cast<int64_t>(durationUs), sfId, myGeneration)
+        .detach();
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -548,6 +783,7 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_unloadSoundfon
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_dispose(JNIEnv* env, jclass clazz) {
+    stopScheduler();  // before gLock — see stopSchedulerLocked's deadlock note
     std::lock_guard<std::mutex> lock(gLock);
     // Keep the engine warm (see resetEngineState); the stream is closed
     // later via shutdown() after an idle timeout or on engine detach.
@@ -556,6 +792,7 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_dispose(JNIEnv
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_shutdown(JNIEnv* env, jclass clazz) {
+    stopScheduler();  // before gLock — see stopSchedulerLocked's deadlock note
     std::lock_guard<std::mutex> lock(gLock);
     destroyEngine();
 }

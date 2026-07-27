@@ -68,6 +68,22 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     @JvmStatic
     private external fun stopAllNotes(sfId: Int)
 
+    // Native scheduler (2026-07-25): Dart Timer + platform-channel round-trip
+    // is jittery (Android main thread may be busy when the message arrives),
+    // most audible in latency calibration ("tempo speeding up/slowing down").
+    // These run entirely on a dedicated native thread with a monotonic clock.
+    @JvmStatic
+    private external fun startPatternLoop(offsetsUs: LongArray, accents: BooleanArray, measureUs: Long,
+                                           channel: Int, key: Int, accentKey: Int, velocity: Int,
+                                           tickUs: Long, sfId: Int)
+
+    @JvmStatic
+    private external fun stopPatternLoop()
+
+    @JvmStatic
+    private external fun scheduleNote(delayUs: Long, channel: Int, key: Int, velocity: Int,
+                                       durationUs: Long, sfId: Int)
+
     @JvmStatic
   private external fun controlChange(sfId: Int, channel: Int, controller: Int, value: Int)
 
@@ -184,6 +200,34 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       "stopAllNotes" -> {
         val sfId = call.argument<Int>("sfId") as Int
         stopAllNotes(sfId)
+        result.success(null)
+      }
+      "startPatternLoop" -> {
+        val offsetsUs = (call.argument<List<Number>>("offsetsUs") ?: emptyList())
+            .map { it.toLong() }.toLongArray()
+        val accents = (call.argument<List<Boolean>>("accents") ?: emptyList()).toBooleanArray()
+        val measureUs = (call.argument<Number>("measureUs") ?: 0).toLong()
+        val channel = call.argument<Int>("channel") ?: 0
+        val key = call.argument<Int>("key") ?: 0
+        val accentKey = call.argument<Int>("accentKey") ?: key
+        val velocity = call.argument<Int>("velocity") ?: 100
+        val tickUs = (call.argument<Number>("tickUs") ?: 0).toLong()
+        val sfId = call.argument<Int>("sfId") ?: 1
+        startPatternLoop(offsetsUs, accents, measureUs, channel, key, accentKey, velocity, tickUs, sfId)
+        result.success(null)
+      }
+      "stopPatternLoop" -> {
+        stopPatternLoop()
+        result.success(null)
+      }
+      "scheduleNote" -> {
+        val delayUs = (call.argument<Number>("delayUs") ?: 0).toLong()
+        val channel = call.argument<Int>("channel") ?: 0
+        val key = call.argument<Int>("key") ?: 0
+        val velocity = call.argument<Int>("velocity") ?: 100
+        val durationUs = (call.argument<Number>("durationUs") ?: 0).toLong()
+        val sfId = call.argument<Int>("sfId") ?: 1
+        scheduleNote(delayUs, channel, key, velocity, durationUs, sfId)
         result.success(null)
       }
       "controlChange" -> {
