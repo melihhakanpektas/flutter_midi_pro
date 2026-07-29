@@ -1,5 +1,8 @@
 package com.melihhakanpektas.flutter_midi_pro
 
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -99,6 +102,11 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     @JvmStatic
     private external fun keyPressure(sfId: Int, channel: Int, key: Int, value: Int)
 
+    // Rebinds the audio driver to the given output device id (0 = automatic
+    // routing). Used to force the built-in speaker for loopback measurements.
+    @JvmStatic
+    private external fun setOutputDevice(deviceId: Int): Int
+
     @JvmStatic
     private external fun setMasterGain(gain: Float)
 
@@ -117,6 +125,7 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   }
 
   private lateinit var channel : MethodChannel
+  private var context: Context? = null
 
   // Closes the audio stream a while after dispose(): stream open/close
   // transitions can pop on some devices, so init()/dispose() cycles keep the
@@ -126,6 +135,15 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
+    context = flutterPluginBinding.applicationContext
+  }
+
+  /// The AudioDeviceInfo id of the built-in speaker, or 0 if not found
+  /// (0 = "automatic routing" for the native driver).
+  private fun builtinSpeakerDeviceId(): Int {
+    val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return 0
+    return audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+      .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }?.id ?: 0
   }
  override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
     when (call.method) {
@@ -288,6 +306,44 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         // iOS/macOS-only features (audio session, AVAudioEngine effect chain);
         // no-op on Android.
         result.success(null)
+      }
+      "getAudioRoute" -> {
+        // Heuristic over the connected output devices, matching Android's own
+        // media routing precedence: Bluetooth > wired/USB > built-in speaker.
+        val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: emptyArray()
+        val route = when {
+          devices.any {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+          } -> "bluetooth"
+          devices.any {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+            it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+            it.type == AudioDeviceInfo.TYPE_USB_DEVICE
+          } -> "wired"
+          devices.any { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER } -> "speaker"
+          else -> "other"
+        }
+        result.success(route)
+      }
+      "overrideOutputToSpeaker" -> {
+        // Loopback measurements must play from the built-in speaker even when
+        // headphones/Bluetooth are connected. The native driver is rebound to
+        // the speaker device (driver recreation — brief output gap).
+        val enabled = call.argument<Boolean>("enabled") ?: false
+        val deviceId = if (enabled) builtinSpeakerDeviceId() else 0
+        CoroutineScope(Dispatchers.IO).launch {
+          val status = setOutputDevice(deviceId)
+          withContext(Dispatchers.Main) {
+            if (status == 0) {
+              result.success(null)
+            } else {
+              result.error("OUTPUT_OVERRIDE_FAILED", "Failed to rebind the audio output device.", null)
+            }
+          }
+        }
       }
       "setReverb" -> {
         val enabled = call.argument<Boolean>("enabled") ?: false

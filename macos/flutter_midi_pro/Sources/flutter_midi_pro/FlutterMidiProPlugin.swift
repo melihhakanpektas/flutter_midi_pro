@@ -239,6 +239,12 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     case "configureAudioSession":
         // iOS-only; there is no AVAudioSession to configure on macOS.
         result(nil)
+    case "overrideOutputToSpeaker":
+        // Mobile-only; there is no AVAudioSession routing on macOS.
+        result(nil)
+    case "getAudioRoute":
+        // Mobile-only route categories; the desktop output is opaque here.
+        result("other")
     case "setReverb":
         let args = call.arguments as! [String: Any]
         reverbParams = (

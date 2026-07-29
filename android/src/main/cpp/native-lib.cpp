@@ -562,6 +562,35 @@ Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_keyPressure(JN
     fluid_synth_key_pressure(gSynth, it->second.channelOffset + channel, key, value);
 }
 
+extern "C" JNIEXPORT int JNICALL
+Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_setOutputDevice(JNIEnv* env, jclass clazz, jint deviceId) {
+    std::lock_guard<std::mutex> lock(gLock);
+    if (gSettings == nullptr || gSynth == nullptr) return -1;
+    // The oboe driver reads its device id once at creation, so switching
+    // devices means recreating the driver (brief output gap; the synth and
+    // loaded soundfonts are untouched). deviceId 0 = automatic routing
+    // (oboe::kUnspecified) — used to restore the default route.
+    if (gDriver != nullptr) {
+        delete_fluid_audio_driver(gDriver);
+        gDriver = nullptr;
+    }
+    fluid_settings_setint(gSettings, "audio.oboe.id", deviceId);
+    fluid_settings_setstr(gSettings, "audio.driver", "oboe");
+    gDriver = new_fluid_audio_driver(gSettings, gSynth);
+    if (gDriver == nullptr) {
+        // Do not stay silent: fall back to automatic routing, then to the
+        // OpenSLES driver (which has no device selection), mirroring
+        // createEngine's fallback chain.
+        fluid_settings_setint(gSettings, "audio.oboe.id", 0);
+        gDriver = new_fluid_audio_driver(gSettings, gSynth);
+    }
+    if (gDriver == nullptr) {
+        fluid_settings_setstr(gSettings, "audio.driver", "opensles");
+        gDriver = new_fluid_audio_driver(gSettings, gSynth);
+    }
+    return gDriver != nullptr ? 0 : -1;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_melihhakanpektas_flutter_1midi_1pro_FlutterMidiProPlugin_setMasterGain(JNIEnv* env, jclass clazz, jfloat gain) {
     std::lock_guard<std::mutex> lock(gLock);

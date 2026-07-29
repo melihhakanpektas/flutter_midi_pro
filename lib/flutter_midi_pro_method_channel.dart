@@ -153,6 +153,16 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
+  Future<void> overrideOutputToSpeaker(bool enabled) async {
+    await _channel.invokeMethod('overrideOutputToSpeaker', {'enabled': enabled});
+  }
+
+  @override
+  Future<String> getAudioRoute() async {
+    return await _channel.invokeMethod<String>('getAudioRoute') ?? 'other';
+  }
+
+  @override
   Future<void> setEqualizer(bool enabled, double bassGain, double midGain, double trebleGain) async {
     await _channel.invokeMethod('setEqualizer', {
       'enabled': enabled,

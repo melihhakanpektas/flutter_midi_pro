@@ -601,6 +601,40 @@ class MidiPro {
         .configureAudioSession(category.name, mixWithOthers, duckOthers);
   }
 
+  /// Forces the synthesizer output to the device's **built-in speaker**
+  /// (`enabled: true`) or restores automatic routing (`enabled: false`),
+  /// temporarily bypassing connected headphones/Bluetooth devices. Intended
+  /// for acoustic loopback measurements (speaker → microphone) that must not
+  /// play through headphones.
+  ///
+  /// **iOS:** uses `AVAudioSession.overrideOutputAudioPort` — only effective
+  /// while the session category is `playAndRecord` (i.e. while a recorder has
+  /// the microphone open); the override is cleared automatically on route or
+  /// category changes. **Android:** recreates the audio driver bound to the
+  /// built-in speaker device, so expect a brief output gap at the switch.
+  /// **macOS:** no-op.
+  Future<void> overrideOutputToSpeaker(bool enabled) async {
+    _ensureInitialized();
+    return FlutterMidiProPlatform.instance.overrideOutputToSpeaker(enabled);
+  }
+
+  /// The device's current audio output route category:
+  /// `'speaker'` (built-in speaker/receiver), `'wired'` (wired or USB
+  /// headphones), `'bluetooth'` (any Bluetooth audio device) or `'other'`
+  /// (AirPlay, HDMI, unknown).
+  ///
+  /// Useful for latency-sensitive callers: Bluetooth output adds substantial
+  /// (~150-250 ms) latency, so timing calibrations should be tied to the
+  /// route they were measured on.
+  ///
+  /// **iOS:** reads `AVAudioSession.currentRoute`. **Android:** a heuristic
+  /// over the connected output devices (Bluetooth wins over wired, wired over
+  /// speaker — matching the platform's own media routing precedence).
+  /// **macOS:** always `'other'`. Can be called before [init].
+  Future<String> getAudioRoute() async {
+    return FlutterMidiProPlatform.instance.getAudioRoute();
+  }
+
   /// Configures the reverb applied to all soundfonts.
   /// [roomSize] (0.0-1.0), [damping] (0.0-1.0), [width] (0.0-100.0) and
   /// [level] (0.0-1.0) follow the FluidSynth reverb parameters.

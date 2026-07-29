@@ -357,6 +357,35 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
         }
+    case "getAudioRoute":
+        // Route category for latency-sensitive callers (calibrations are tied
+        // to the route they were measured on; Bluetooth adds ~150-250 ms).
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        let route: String
+        switch outputs.first?.portType {
+        case .builtInSpeaker?, .builtInReceiver?:
+            route = "speaker"
+        case .headphones?, .usbAudio?:
+            route = "wired"
+        case .bluetoothA2DP?, .bluetoothHFP?, .bluetoothLE?:
+            route = "bluetooth"
+        default:
+            route = "other"
+        }
+        result(route)
+    case "overrideOutputToSpeaker":
+        // Loopback measurements must play from the built-in speaker even when
+        // headphones/Bluetooth are connected. Only effective while the session
+        // category is playAndRecord (a recorder holds the microphone open);
+        // the system clears the override on route/category changes.
+        let args = call.arguments as? [String: Any] ?? [:]
+        let enabled = args["enabled"] as? Bool ?? false
+        do {
+            try AVAudioSession.sharedInstance().overrideOutputAudioPort(enabled ? .speaker : .none)
+            result(nil)
+        } catch {
+            result(FlutterError(code: "OUTPUT_OVERRIDE_FAILED", message: "Failed to override the audio output route: \(error)", details: nil))
+        }
     case "setReverb":
         let args = call.arguments as! [String: Any]
         reverbParams = (
