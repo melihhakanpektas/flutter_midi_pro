@@ -22,6 +22,16 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   var soundfontIndex = 1
   var soundfontSamplers: [Int: [AVAudioUnitSampler]] = [:]
+
+  /// Session preferences requested by the app. Kept so they can be **re-applied**
+  /// after an interruption (a phone call leaves the session on the call's
+  /// hardware format) or a route change. Without this the engine keeps running
+  /// against a stale format and the output degrades audibly — it sounds
+  /// low-resolution, as if the sample rate collapsed.
+  var preferredSampleRate: Double = 44100
+  var preferredBufferSize: Int = 64
+  var preferredCategory: AVAudioSession.Category = .playback
+  var preferredCategoryOptions: AVAudioSession.CategoryOptions = [.mixWithOthers]
   var soundfontURLs: [Int: URL] = [:]
   /// Per-channel [bank, program] of each soundfont, kept so everything can be
   /// rebuilt after a media-services reset.
@@ -92,30 +102,78 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         shouldResume = options.contains(.shouldResume)
       }
       if shouldResume {
-        restartEngineIfNeeded()
+        // A call ends with the session on the call's format: rebuild.
+        recoverAudio(reconnect: true)
       }
     @unknown default:
       break
     }
   }
 
-  /// Headphone unplug / Bluetooth connect can stop the engine.
+  /// Headphone unplug / Bluetooth connect changes the hardware format.
   @objc private func handleRouteChange(notification: Notification) {
-    restartEngineIfNeeded()
+    recoverAudio(reconnect: true)
   }
 
   /// Output hardware/format changed: the engine stops and must be restarted
   /// (connections are re-made automatically by AVAudioEngine).
   @objc private func handleEngineConfigurationChange(notification: Notification) {
-    restartEngineIfNeeded()
+    recoverAudio(reconnect: true)
   }
 
-  private func restartEngineIfNeeded() {
+  /// Re-applies the category and the sample-rate/buffer hints the app asked
+  /// for. A phone call (or a Bluetooth route switch) can leave the session on
+  /// a different category and a much lower hardware sample rate.
+  private func applySessionPreferences() {
+    let session = AVAudioSession.sharedInstance()
+    try? session.setCategory(preferredCategory, options: preferredCategoryOptions)
+    try? session.setPreferredSampleRate(preferredSampleRate)
+    try? session.setPreferredIOBufferDuration(
+      Double(preferredBufferSize) / preferredSampleRate)
+    try? session.setActive(true)
+  }
+
+  /// Re-makes every connection with `format: nil` so the graph picks up the
+  /// **current** hardware format. Connections bind their format when they are
+  /// made; restarting a stopped engine does not re-negotiate them.
+  private func reconnectGraph() {
+    guard let engine = audioEngine,
+          let mixer = globalMixer,
+          let eq = eqNode,
+          let delay = delayNode,
+          let distortion = distortionNode,
+          let reverb = reverbNode else { return }
+    engine.connect(mixer, to: eq, format: nil)
+    engine.connect(eq, to: delay, format: nil)
+    engine.connect(delay, to: distortion, format: nil)
+    engine.connect(distortion, to: reverb, format: nil)
+    engine.connect(reverb, to: engine.mainMixerNode, format: nil)
+    for samplers in soundfontSamplers.values {
+      for sampler in samplers {
+        engine.connect(sampler, to: mixer, format: nil)
+      }
+    }
+  }
+
+  /// Recovers audio after an interruption / route change / engine
+  /// reconfiguration.
+  ///
+  /// Restarting the engine alone is **not** enough when the hardware format
+  /// changed: the graph keeps the format captured at connect time and the
+  /// output degrades audibly (users describe it as "sounds like 16-bit").
+  /// This was first seen on a Bluetooth route switch and again after a phone
+  /// call — the same root cause, so both paths go through here.
+  private func recoverAudio(reconnect: Bool) {
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, let engine = self.audioEngine, !engine.isRunning else { return }
+      guard let self = self, let engine = self.audioEngine else { return }
       // An interruption can leave the audio session deactivated, in which
       // case starting the engine fails until it is re-activated (PR #55).
-      try? AVAudioSession.sharedInstance().setActive(true)
+      self.applySessionPreferences()
+      if reconnect {
+        if engine.isRunning { engine.stop() }
+        self.reconnectGraph()
+      }
+      guard !engine.isRunning else { return }
       do {
         try engine.start()
       } catch {
@@ -318,11 +376,9 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         resetState()
         if let args = call.arguments as? [String: Any] {
             // Best-effort latency/sample-rate hints; the hardware may grant less.
-            let sampleRate = Double(args["sampleRate"] as? Int ?? 44100)
-            let bufferSize = args["bufferSize"] as? Int ?? 64
-            let session = AVAudioSession.sharedInstance()
-            try? session.setPreferredSampleRate(sampleRate)
-            try? session.setPreferredIOBufferDuration(Double(bufferSize) / sampleRate)
+            preferredSampleRate = Double(args["sampleRate"] as? Int ?? 44100)
+            preferredBufferSize = args["bufferSize"] as? Int ?? 64
+            applySessionPreferences()
         }
         do {
             try setupEngine()
@@ -349,6 +405,8 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         var options: AVAudioSession.CategoryOptions = []
         if mixWithOthers { options.insert(.mixWithOthers) }
         if duckOthers { options.insert(.duckOthers) }
+        preferredCategory = category
+        preferredCategoryOptions = options
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(category, options: options)

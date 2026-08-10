@@ -129,3 +129,17 @@
 ## 4.0.4
 
 - [#56](https://github.com/melihhakanpektas/flutter_midi_pro/issues/56) fix.
+
+## 4.0.5
+
+- Fixed degraded audio after an interruption or a route change on iOS. A phone
+  call or a switch to Bluetooth changes the hardware format, and restarting the
+  engine was not enough: AVAudioEngine connections keep the format they were
+  made with, so the graph kept running against a stale format and the output
+  degraded audibly. Interruption end, route change and engine configuration
+  change now share one recovery path: the session preferences (category, sample
+  rate, IO buffer) are re-applied, the graph is reconnected with `format: nil`
+  so nodes pick up the current hardware format, and only then is the engine
+  started. The category and sample rate requested through `init` /
+  `configureAudioSession` are remembered, so a call that leaves the session in
+  another category no longer sticks.
