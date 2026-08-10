@@ -635,6 +635,26 @@ class MidiPro {
     return FlutterMidiProPlatform.instance.getAudioRoute();
   }
 
+  /// Diagnostics for the audio session (iOS only; empty elsewhere).
+  ///
+  /// Returns the live hardware format together with the format the engine
+  /// graph is actually running against:
+  ///
+  /// - `sampleRate` / `connectedSampleRate` — if these disagree, the graph was
+  ///   built against a format the hardware no longer uses and the output will
+  ///   sound low-resolution.
+  /// - `category`, `categoryOptions`, `outputs`, `inputs` — the route in
+  ///   effect. A Bluetooth device that exposes a microphone can drag a
+  ///   `playAndRecord` session onto the 8/16 kHz HFP profile unless the
+  ///   category options restrict Bluetooth to A2DP.
+  /// - `ioBufferDuration`, `outputChannels`.
+  ///
+  /// Intended for bug reports: it turns "the sound suddenly got worse" into
+  /// numbers.
+  Future<Map<String, Object?>> getAudioSessionInfo() async {
+    return FlutterMidiProPlatform.instance.getAudioSessionInfo();
+  }
+
   /// Configures the reverb applied to all soundfonts.
   /// [roomSize] (0.0-1.0), [damping] (0.0-1.0), [width] (0.0-100.0) and
   /// [level] (0.0-1.0) follow the FluidSynth reverb parameters.

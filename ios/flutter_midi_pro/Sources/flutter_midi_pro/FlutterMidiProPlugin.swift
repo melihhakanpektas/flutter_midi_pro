@@ -30,8 +30,11 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   /// low-resolution, as if the sample rate collapsed.
   var preferredSampleRate: Double = 44100
   var preferredBufferSize: Int = 64
-  var preferredCategory: AVAudioSession.Category = .playback
-  var preferredCategoryOptions: AVAudioSession.CategoryOptions = [.mixWithOthers]
+
+  /// Hardware sample rate the graph was last connected at. Connections bind
+  /// their format when they are made, so this is what the graph is actually
+  /// running against; recovery compares it with the live session.
+  var connectedSampleRate: Double = 0
   var soundfontURLs: [Int: URL] = [:]
   /// Per-channel [bank, program] of each soundfont, kept so everything can be
   /// rebuilt after a media-services reset.
@@ -121,12 +124,17 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     recoverAudio(reconnect: true)
   }
 
-  /// Re-applies the category and the sample-rate/buffer hints the app asked
-  /// for. A phone call (or a Bluetooth route switch) can leave the session on
-  /// a different category and a much lower hardware sample rate.
+  /// Re-applies the sample-rate/buffer hints the app asked for and makes sure
+  /// the session is active again.
+  ///
+  /// **The category is deliberately left alone.** Another component may own
+  /// it: while a recorder is capturing, the session is `playAndRecord` with
+  /// its own options (e.g. Bluetooth restricted to A2DP so the route cannot
+  /// fall back to 8/16 kHz HFP). Re-asserting a category captured at startup
+  /// would silently drop those options — and it would do so exactly when a
+  /// Bluetooth device connects, which is the moment they matter most.
   private func applySessionPreferences() {
     let session = AVAudioSession.sharedInstance()
-    try? session.setCategory(preferredCategory, options: preferredCategoryOptions)
     try? session.setPreferredSampleRate(preferredSampleRate)
     try? session.setPreferredIOBufferDuration(
       Double(preferredBufferSize) / preferredSampleRate)
@@ -153,6 +161,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         engine.connect(sampler, to: mixer, format: nil)
       }
     }
+    connectedSampleRate = AVAudioSession.sharedInstance().sampleRate
   }
 
   /// Recovers audio after an interruption / route change / engine
@@ -164,12 +173,27 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   /// This was first seen on a Bluetooth route switch and again after a phone
   /// call — the same root cause, so both paths go through here.
   private func recoverAudio(reconnect: Bool) {
+    recoverAudioNow(reconnect: reconnect)
+    // Route changes settle asynchronously: the hardware format right after the
+    // notification can still be the old one. Re-check shortly after, and
+    // reconnect only if the graph is running against a stale rate.
+    if reconnect {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+        self?.recoverAudioNow(reconnect: false)
+      }
+    }
+  }
+
+  private func recoverAudioNow(reconnect: Bool) {
     DispatchQueue.main.async { [weak self] in
       guard let self = self, let engine = self.audioEngine else { return }
       // An interruption can leave the audio session deactivated, in which
       // case starting the engine fails until it is re-activated (PR #55).
       self.applySessionPreferences()
-      if reconnect {
+      let live = AVAudioSession.sharedInstance().sampleRate
+      let stale = live > 0 && self.connectedSampleRate > 0
+        && abs(live - self.connectedSampleRate) > 1
+      if reconnect || stale {
         if engine.isRunning { engine.stop() }
         self.reconnectGraph()
       }
@@ -257,6 +281,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
       object: engine
     )
 
+    connectedSampleRate = AVAudioSession.sharedInstance().sampleRate
     audioEngine = engine
     globalMixer = mixer
     eqNode = eq
@@ -405,8 +430,6 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         var options: AVAudioSession.CategoryOptions = []
         if mixWithOthers { options.insert(.mixWithOthers) }
         if duckOthers { options.insert(.duckOthers) }
-        preferredCategory = category
-        preferredCategoryOptions = options
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(category, options: options)
@@ -415,6 +438,21 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
         }
+    case "getAudioSessionInfo":
+        // Diagnostics for "the audio suddenly sounds low-resolution" reports:
+        // the live hardware format plus the format the graph is running
+        // against. If they disagree, the graph is stale.
+        let session = AVAudioSession.sharedInstance()
+        result([
+            "sampleRate": session.sampleRate,
+            "connectedSampleRate": connectedSampleRate,
+            "ioBufferDuration": session.ioBufferDuration,
+            "outputChannels": session.outputNumberOfChannels,
+            "category": session.category.rawValue,
+            "categoryOptions": Int(session.categoryOptions.rawValue),
+            "outputs": session.currentRoute.outputs.map { $0.portType.rawValue },
+            "inputs": session.currentRoute.inputs.map { $0.portType.rawValue },
+        ])
     case "getAudioRoute":
         // Route category for latency-sensitive callers (calibrations are tied
         // to the route they were measured on; Bluetooth adds ~150-250 ms).

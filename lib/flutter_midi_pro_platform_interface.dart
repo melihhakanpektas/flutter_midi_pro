@@ -125,6 +125,10 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('overrideOutputToSpeaker() has not been implemented.');
   }
 
+  Future<Map<String, Object?>> getAudioSessionInfo() {
+    throw UnimplementedError('getAudioSessionInfo() has not been implemented.');
+  }
+
   Future<String> getAudioRoute() {
     throw UnimplementedError('getAudioRoute() has not been implemented.');
   }

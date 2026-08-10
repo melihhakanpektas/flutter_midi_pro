@@ -143,3 +143,20 @@
   started. The category and sample rate requested through `init` /
   `configureAudioSession` are remembered, so a call that leaves the session in
   another category no longer sticks.
+
+## 4.0.6
+
+- Recovery no longer re-asserts the audio session **category**. 4.0.5 captured
+  the category at startup and restored it on every route change, which silently
+  dropped the options another component had set — for example a recorder using
+  `playAndRecord` with Bluetooth restricted to A2DP so the route cannot fall
+  back to the 8/16 kHz HFP profile. Those options were being dropped exactly
+  when a Bluetooth device connected, which is when they matter most. Recovery
+  now only re-applies the sample rate / IO buffer and re-activates the session.
+- Recovery reconnects the graph when the hardware sample rate actually differs
+  from the one the graph was built with, and re-checks shortly after a route
+  change (route changes settle asynchronously, so the format right after the
+  notification can still be the old one).
+- Added `getAudioSessionInfo()`: live hardware format, the format the graph is
+  connected at, category, category options and the current route. Intended for
+  bug reports about audio that suddenly sounds low-resolution.

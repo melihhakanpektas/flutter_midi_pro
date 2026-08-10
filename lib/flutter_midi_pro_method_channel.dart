@@ -158,6 +158,13 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
+  Future<Map<String, Object?>> getAudioSessionInfo() async {
+    final info = await _channel
+        .invokeMapMethod<String, Object?>('getAudioSessionInfo');
+    return info ?? const {};
+  }
+
+  @override
   Future<String> getAudioRoute() async {
     return await _channel.invokeMethod<String>('getAudioRoute') ?? 'other';
   }
