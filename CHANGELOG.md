@@ -160,3 +160,15 @@
 - Added `getAudioSessionInfo()`: live hardware format, the format the graph is
   connected at, category, category options and the current route. Intended for
   bug reports about audio that suddenly sounds low-resolution.
+
+## 4.0.7
+
+- Added `refreshAudioSession()`. Activating `playAndRecord` can reconfigure the
+  hardware **without changing the route** (the speaker stays the speaker), and
+  in that case iOS posts no route-change notification — so the plugin could not
+  notice that the graph was left connected to the previous format, and playback
+  during recording sounded low-resolution. Whoever owns the session (a recorder
+  starting or stopping) can now say so explicitly.
+- Staleness detection also compares the **output channel count**, not only the
+  sample rate: activating `playAndRecord` can change either.
+

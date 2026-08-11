@@ -31,10 +31,11 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   var preferredSampleRate: Double = 44100
   var preferredBufferSize: Int = 64
 
-  /// Hardware sample rate the graph was last connected at. Connections bind
+  /// Hardware output format the graph was last connected at. Connections bind
   /// their format when they are made, so this is what the graph is actually
   /// running against; recovery compares it with the live session.
   var connectedSampleRate: Double = 0
+  var connectedOutputChannels: Int = 0
   var soundfontURLs: [Int: URL] = [:]
   /// Per-channel [bank, program] of each soundfont, kept so everything can be
   /// rebuilt after a media-services reset.
@@ -161,7 +162,27 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         engine.connect(sampler, to: mixer, format: nil)
       }
     }
-    connectedSampleRate = AVAudioSession.sharedInstance().sampleRate
+    rememberConnectedFormat()
+  }
+
+  private func rememberConnectedFormat() {
+    let session = AVAudioSession.sharedInstance()
+    connectedSampleRate = session.sampleRate
+    connectedOutputChannels = session.outputNumberOfChannels
+  }
+
+  /// True when the live hardware output format no longer matches the one the
+  /// graph was connected at. Both the sample rate **and the channel count**
+  /// matter: activating `playAndRecord` can change either, and a graph built
+  /// for the old format renders through a mismatched one.
+  private var formatIsStale: Bool {
+    let session = AVAudioSession.sharedInstance()
+    if connectedSampleRate <= 0 { return false }
+    if session.sampleRate > 0 && abs(session.sampleRate - connectedSampleRate) > 1 {
+      return true
+    }
+    return session.outputNumberOfChannels > 0
+      && session.outputNumberOfChannels != connectedOutputChannels
   }
 
   /// Recovers audio after an interruption / route change / engine
@@ -190,10 +211,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
       // An interruption can leave the audio session deactivated, in which
       // case starting the engine fails until it is re-activated (PR #55).
       self.applySessionPreferences()
-      let live = AVAudioSession.sharedInstance().sampleRate
-      let stale = live > 0 && self.connectedSampleRate > 0
-        && abs(live - self.connectedSampleRate) > 1
-      if reconnect || stale {
+      if reconnect || self.formatIsStale {
         if engine.isRunning { engine.stop() }
         self.reconnectGraph()
       }
@@ -281,7 +299,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
       object: engine
     )
 
-    connectedSampleRate = AVAudioSession.sharedInstance().sampleRate
+    rememberConnectedFormat()
     audioEngine = engine
     globalMixer = mixer
     eqNode = eq
@@ -438,6 +456,15 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
         }
+    case "refreshAudioSession":
+        // Explicit hook for the cases iOS does not announce. Activating
+        // `playAndRecord` can reconfigure the hardware without changing the
+        // route (speaker stays speaker), and then no route-change notification
+        // is posted — yet the graph is left connected to the previous format.
+        // Callers that own the session (a recorder starting or stopping)
+        // should call this right after they change it.
+        recoverAudio(reconnect: true)
+        result(nil)
     case "getAudioSessionInfo":
         // Diagnostics for "the audio suddenly sounds low-resolution" reports:
         // the live hardware format plus the format the graph is running

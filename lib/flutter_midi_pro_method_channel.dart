@@ -158,6 +158,11 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
+  Future<void> refreshAudioSession() async {
+    await _channel.invokeMethod('refreshAudioSession');
+  }
+
+  @override
   Future<Map<String, Object?>> getAudioSessionInfo() async {
     final info = await _channel
         .invokeMapMethod<String, Object?>('getAudioSessionInfo');
