@@ -144,22 +144,23 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
-  Future<void> configureAudioSession(String category, bool mixWithOthers, bool duckOthers) async {
+  Future<void> configureAudioSession(
+    String category,
+    bool mixWithOthers,
+    bool duckOthers, {
+    List<String>? options,
+  }) async {
     await _channel.invokeMethod('configureAudioSession', {
       'category': category,
       'mixWithOthers': mixWithOthers,
       'duckOthers': duckOthers,
+      if (options != null) 'options': options,
     });
   }
 
   @override
   Future<void> overrideOutputToSpeaker(bool enabled) async {
     await _channel.invokeMethod('overrideOutputToSpeaker', {'enabled': enabled});
-  }
-
-  @override
-  Future<void> refreshAudioSession() async {
-    await _channel.invokeMethod('refreshAudioSession');
   }
 
   @override

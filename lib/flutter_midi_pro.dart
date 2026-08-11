@@ -592,13 +592,21 @@ class MidiPro {
   ///
   /// **Platform: iOS only.** No-op on Android and macOS. Can be called at any
   /// time, also before [init].
+  /// [options], when given, replaces [mixWithOthers] / [duckOthers] and
+  /// expresses the whole iOS option set: `mixWithOthers`, `duckOthers`,
+  /// `defaultToSpeaker`, `allowBluetoothA2DP`, `allowAirPlay`.
   Future<void> configureAudioSession({
     AudioSessionCategory category = AudioSessionCategory.playback,
     bool mixWithOthers = true,
     bool duckOthers = false,
+    List<String>? options,
   }) async {
-    return FlutterMidiProPlatform.instance
-        .configureAudioSession(category.name, mixWithOthers, duckOthers);
+    return FlutterMidiProPlatform.instance.configureAudioSession(
+      category.name,
+      mixWithOthers,
+      duckOthers,
+      options: options,
+    );
   }
 
   /// Forces the synthesizer output to the device's **built-in speaker**
@@ -633,21 +641,6 @@ class MidiPro {
   /// **macOS:** always `'other'`. Can be called before [init].
   Future<String> getAudioRoute() async {
     return FlutterMidiProPlatform.instance.getAudioRoute();
-  }
-
-  /// Re-checks the audio session and rebuilds the engine graph if the
-  /// hardware output format no longer matches the one it was connected at
-  /// (iOS only; a no-op elsewhere).
-  ///
-  /// Call this right after something else reconfigures the session — most
-  /// importantly a **recorder starting or stopping**. Activating
-  /// `playAndRecord` can reconfigure the hardware without changing the route
-  /// (the speaker stays the speaker), and in that case iOS posts no route
-  /// change notification, so the plugin has no way to notice on its own. The
-  /// graph would keep rendering through the previous format and the output
-  /// would sound low-resolution.
-  Future<void> refreshAudioSession() async {
-    return FlutterMidiProPlatform.instance.refreshAudioSession();
   }
 
   /// Diagnostics for the audio session (iOS only; empty elsewhere).

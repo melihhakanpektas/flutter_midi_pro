@@ -117,16 +117,17 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('sendMidiEvent() has not been implemented.');
   }
 
-  Future<void> configureAudioSession(String category, bool mixWithOthers, bool duckOthers) {
+  Future<void> configureAudioSession(
+    String category,
+    bool mixWithOthers,
+    bool duckOthers, {
+    List<String>? options,
+  }) {
     throw UnimplementedError('configureAudioSession() has not been implemented.');
   }
 
   Future<void> overrideOutputToSpeaker(bool enabled) {
     throw UnimplementedError('overrideOutputToSpeaker() has not been implemented.');
-  }
-
-  Future<void> refreshAudioSession() {
-    throw UnimplementedError('refreshAudioSession() has not been implemented.');
   }
 
   Future<Map<String, Object?>> getAudioSessionInfo() {

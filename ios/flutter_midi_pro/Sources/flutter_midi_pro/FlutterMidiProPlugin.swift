@@ -31,11 +31,10 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   var preferredSampleRate: Double = 44100
   var preferredBufferSize: Int = 64
 
-  /// Hardware output format the graph was last connected at. Connections bind
-  /// their format when they are made, so this is what the graph is actually
-  /// running against; recovery compares it with the live session.
+  /// Hardware sample rate the graph was connected at. Connections bind their
+  /// format when they are made, so this is what the graph is actually running
+  /// against — useful in bug reports when it disagrees with the live session.
   var connectedSampleRate: Double = 0
-  var connectedOutputChannels: Int = 0
   var soundfontURLs: [Int: URL] = [:]
   /// Per-channel [bank, program] of each soundfont, kept so everything can be
   /// rebuilt after a media-services reset.
@@ -106,8 +105,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         shouldResume = options.contains(.shouldResume)
       }
       if shouldResume {
-        // A call ends with the session on the call's format: rebuild.
-        recoverAudio(reconnect: true)
+        restartEngineIfNeeded()
       }
     @unknown default:
       break
@@ -116,106 +114,31 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   /// Headphone unplug / Bluetooth connect changes the hardware format.
   @objc private func handleRouteChange(notification: Notification) {
-    recoverAudio(reconnect: true)
+    restartEngineIfNeeded()
   }
 
   /// Output hardware/format changed: the engine stops and must be restarted
   /// (connections are re-made automatically by AVAudioEngine).
   @objc private func handleEngineConfigurationChange(notification: Notification) {
-    recoverAudio(reconnect: true)
+    restartEngineIfNeeded()
   }
 
-  /// Re-applies the sample-rate/buffer hints the app asked for and makes sure
-  /// the session is active again.
+  /// Restarts the engine if an interruption or a route change stopped it.
   ///
-  /// **The category is deliberately left alone.** Another component may own
-  /// it: while a recorder is capturing, the session is `playAndRecord` with
-  /// its own options (e.g. Bluetooth restricted to A2DP so the route cannot
-  /// fall back to 8/16 kHz HFP). Re-asserting a category captured at startup
-  /// would silently drop those options — and it would do so exactly when a
-  /// Bluetooth device connects, which is the moment they matter most.
-  private func applySessionPreferences() {
-    let session = AVAudioSession.sharedInstance()
-    try? session.setPreferredSampleRate(preferredSampleRate)
-    try? session.setPreferredIOBufferDuration(
-      Double(preferredBufferSize) / preferredSampleRate)
-    try? session.setActive(true)
-  }
-
-  /// Re-makes every connection with `format: nil` so the graph picks up the
-  /// **current** hardware format. Connections bind their format when they are
-  /// made; restarting a stopped engine does not re-negotiate them.
-  private func reconnectGraph() {
-    guard let engine = audioEngine,
-          let mixer = globalMixer,
-          let eq = eqNode,
-          let delay = delayNode,
-          let distortion = distortionNode,
-          let reverb = reverbNode else { return }
-    engine.connect(mixer, to: eq, format: nil)
-    engine.connect(eq, to: delay, format: nil)
-    engine.connect(delay, to: distortion, format: nil)
-    engine.connect(distortion, to: reverb, format: nil)
-    engine.connect(reverb, to: engine.mainMixerNode, format: nil)
-    for samplers in soundfontSamplers.values {
-      for sampler in samplers {
-        engine.connect(sampler, to: mixer, format: nil)
-      }
-    }
-    rememberConnectedFormat()
-  }
-
-  private func rememberConnectedFormat() {
-    let session = AVAudioSession.sharedInstance()
-    connectedSampleRate = session.sampleRate
-    connectedOutputChannels = session.outputNumberOfChannels
-  }
-
-  /// True when the live hardware output format no longer matches the one the
-  /// graph was connected at. Both the sample rate **and the channel count**
-  /// matter: activating `playAndRecord` can change either, and a graph built
-  /// for the old format renders through a mismatched one.
-  private var formatIsStale: Bool {
-    let session = AVAudioSession.sharedInstance()
-    if connectedSampleRate <= 0 { return false }
-    if session.sampleRate > 0 && abs(session.sampleRate - connectedSampleRate) > 1 {
-      return true
-    }
-    return session.outputNumberOfChannels > 0
-      && session.outputNumberOfChannels != connectedOutputChannels
-  }
-
-  /// Recovers audio after an interruption / route change / engine
-  /// reconfiguration.
-  ///
-  /// Restarting the engine alone is **not** enough when the hardware format
-  /// changed: the graph keeps the format captured at connect time and the
-  /// output degrades audibly (users describe it as "sounds like 16-bit").
-  /// This was first seen on a Bluetooth route switch and again after a phone
-  /// call — the same root cause, so both paths go through here.
-  private func recoverAudio(reconnect: Bool) {
-    recoverAudioNow(reconnect: reconnect)
-    // Route changes settle asynchronously: the hardware format right after the
-    // notification can still be the old one. Re-check shortly after, and
-    // reconnect only if the graph is running against a stale rate.
-    if reconnect {
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-        self?.recoverAudioNow(reconnect: false)
-      }
-    }
-  }
-
-  private func recoverAudioNow(reconnect: Bool) {
+  /// **Connections are deliberately left alone.** 4.0.5 rebuilt them here on
+  /// every route change; activating `playAndRecord` (a recorder starting)
+  /// posts a route change, so the graph was being reconnected *while the
+  /// session was in the recording category* and bound to that format —
+  /// playback then sounded low-resolution for the rest of the session, and
+  /// restoring the category did not undo it. Measured on device: with the
+  /// reconnect removed, playback stays clean while recording.
+  private func restartEngineIfNeeded() {
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, let engine = self.audioEngine else { return }
+      guard let self = self, let engine = self.audioEngine, !engine.isRunning
+      else { return }
       // An interruption can leave the audio session deactivated, in which
       // case starting the engine fails until it is re-activated (PR #55).
-      self.applySessionPreferences()
-      if reconnect || self.formatIsStale {
-        if engine.isRunning { engine.stop() }
-        self.reconnectGraph()
-      }
-      guard !engine.isRunning else { return }
+      try? AVAudioSession.sharedInstance().setActive(true)
       do {
         try engine.start()
       } catch {
@@ -438,6 +361,10 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let categoryName = args["category"] as? String ?? "playback"
         let mixWithOthers = args["mixWithOthers"] as? Bool ?? true
         let duckOthers = args["duckOthers"] as? Bool ?? false
+        // Explicit option names win over the booleans when given, so callers
+        // can express the whole option set (`defaultToSpeaker`,
+        // `allowBluetoothA2DP`, …) instead of just the two common flags.
+        let optionNames = args["options"] as? [String]
         let category: AVAudioSession.Category
         switch categoryName {
         case "ambient": category = .ambient
@@ -446,8 +373,21 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         default: category = .playback
         }
         var options: AVAudioSession.CategoryOptions = []
-        if mixWithOthers { options.insert(.mixWithOthers) }
-        if duckOthers { options.insert(.duckOthers) }
+        if let names = optionNames {
+            for name in names {
+                switch name {
+                case "mixWithOthers": options.insert(.mixWithOthers)
+                case "duckOthers": options.insert(.duckOthers)
+                case "defaultToSpeaker": options.insert(.defaultToSpeaker)
+                case "allowBluetoothA2DP": options.insert(.allowBluetoothA2DP)
+                case "allowAirPlay": options.insert(.allowAirPlay)
+                default: break
+                }
+            }
+        } else {
+            if mixWithOthers { options.insert(.mixWithOthers) }
+            if duckOthers { options.insert(.duckOthers) }
+        }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(category, options: options)
@@ -456,15 +396,6 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
         }
-    case "refreshAudioSession":
-        // Explicit hook for the cases iOS does not announce. Activating
-        // `playAndRecord` can reconfigure the hardware without changing the
-        // route (speaker stays speaker), and then no route-change notification
-        // is posted — yet the graph is left connected to the previous format.
-        // Callers that own the session (a recorder starting or stopping)
-        // should call this right after they change it.
-        recoverAudio(reconnect: true)
-        result(nil)
     case "getAudioSessionInfo":
         // Diagnostics for "the audio suddenly sounds low-resolution" reports:
         // the live hardware format plus the format the graph is running
@@ -476,6 +407,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
             "ioBufferDuration": session.ioBufferDuration,
             "outputChannels": session.outputNumberOfChannels,
             "category": session.category.rawValue,
+            "mode": session.mode.rawValue,
             "categoryOptions": Int(session.categoryOptions.rawValue),
             "outputs": session.currentRoute.outputs.map { $0.portType.rawValue },
             "inputs": session.currentRoute.inputs.map { $0.portType.rawValue },

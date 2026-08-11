@@ -132,43 +132,44 @@
 
 ## 4.0.5
 
-- Fixed degraded audio after an interruption or a route change on iOS. A phone
-  call or a switch to Bluetooth changes the hardware format, and restarting the
-  engine was not enough: AVAudioEngine connections keep the format they were
-  made with, so the graph kept running against a stale format and the output
-  degraded audibly. Interruption end, route change and engine configuration
-  change now share one recovery path: the session preferences (category, sample
-  rate, IO buffer) are re-applied, the graph is reconnected with `format: nil`
-  so nodes pick up the current hardware format, and only then is the engine
-  started. The category and sample rate requested through `init` /
-  `configureAudioSession` are remembered, so a call that leaves the session in
-  another category no longer sticks.
+- Reworked interruption/route-change recovery: connections were rebuilt when
+  the session changed. **Reverted in 4.0.8** — it degraded playback while
+  recording. 4.0.6 and 4.0.7 were follow-up attempts at the same problem and
+  are superseded by 4.0.8.
 
 ## 4.0.6
 
-- Recovery no longer re-asserts the audio session **category**. 4.0.5 captured
-  the category at startup and restored it on every route change, which silently
-  dropped the options another component had set — for example a recorder using
-  `playAndRecord` with Bluetooth restricted to A2DP so the route cannot fall
-  back to the 8/16 kHz HFP profile. Those options were being dropped exactly
-  when a Bluetooth device connected, which is when they matter most. Recovery
-  now only re-applies the sample rate / IO buffer and re-activates the session.
-- Recovery reconnects the graph when the hardware sample rate actually differs
-  from the one the graph was built with, and re-checks shortly after a route
-  change (route changes settle asynchronously, so the format right after the
-  notification can still be the old one).
-- Added `getAudioSessionInfo()`: live hardware format, the format the graph is
-  connected at, category, category options and the current route. Intended for
-  bug reports about audio that suddenly sounds low-resolution.
+- Recovery stopped re-asserting the session category (it was dropping options
+  another component had set). Superseded by 4.0.8.
 
 ## 4.0.7
 
-- Added `refreshAudioSession()`. Activating `playAndRecord` can reconfigure the
-  hardware **without changing the route** (the speaker stays the speaker), and
-  in that case iOS posts no route-change notification — so the plugin could not
-  notice that the graph was left connected to the previous format, and playback
-  during recording sounded low-resolution. Whoever owns the session (a recorder
-  starting or stopping) can now say so explicitly.
-- Staleness detection also compares the **output channel count**, not only the
-  sample rate: activating `playAndRecord` can change either.
+- Added `refreshAudioSession()` and channel-count staleness detection.
+  Superseded by 4.0.8, which removes both.
 
+## 4.0.8
+
+- **Reverted the connection rebuilding introduced in 4.0.5.** Route changes,
+  interruptions and engine configuration changes once again only restart the
+  engine if it stopped; the graph's connections are left alone.
+
+  Rebuilding connections on every route change looked harmless but was not:
+  activating `playAndRecord` (a recorder starting) posts a route change, so the
+  graph was reconnected *while the session was in the recording category* and
+  bound to that format. Playback then came out low-resolution for the rest of
+  the session, and restoring the category did not undo it — the damage was in
+  the graph, not the session. Verified on device: with the reconnect removed,
+  playback stays clean while recording, in both directions, repeatedly.
+
+- Removed `setAudioSessionMode()` and `refreshAudioSession()`. Both were added
+  while chasing the above; device measurements ruled out the hypotheses behind
+  them (every session mode degraded playback equally, and the format never went
+  stale — sample rate, channel count and route were identical throughout).
+
+- Kept `getAudioSessionInfo()`: the live hardware format, the format the graph
+  is connected at, the category, its options and the current route. These were
+  the numbers that settled the diagnosis.
+
+- `configureAudioSession()` accepts an explicit `options` list
+  (`defaultToSpeaker`, `allowBluetoothA2DP`, `mixWithOthers`, `duckOthers`,
+  `allowAirPlay`) instead of only the two booleans.
