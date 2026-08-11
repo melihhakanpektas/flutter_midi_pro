@@ -98,6 +98,10 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
       }
       if shouldResume {
         restartEngineIfNeeded()
+        // An interruption (a phone call) can leave the graph damaged in a way
+        // restarting does not undo. Rebuild — deferred if a recorder currently
+        // owns the session.
+        rebuildEngine(reason: "interruption ended")
       }
     @unknown default:
       break
@@ -142,6 +146,24 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   /// The audio daemon crashed: every engine, node and loaded bank is invalid.
   /// Rebuild the whole graph from the tracked soundfont URLs and programs.
   @objc private func handleMediaServicesReset(notification: Notification) {
+    rebuildEngine(reason: "media services reset")
+  }
+
+  /// Tears the engine down and builds it again from the tracked soundfonts.
+  ///
+  /// This is the **only** repair that works once the graph has been damaged:
+  /// reconnecting existing nodes does not undo it (measured on device). It
+  /// costs a soundfont reload, so it runs only on the paths that genuinely
+  /// invalidate the graph — a media services reset, or the end of an
+  /// interruption such as a phone call.
+  ///
+  /// It deliberately does **not** try to wait for a recorder to finish. The
+  /// session category is not a usable signal for that: a recorder leaves it on
+  /// `playAndRecord` after it stops, so "wait until recording ends" would wait
+  /// forever once the app has recorded once. The category is also not a
+  /// problem to rebuild under — measured on device, playback under
+  /// `playAndRecord` is clean as long as nothing reconnects the graph.
+  private func rebuildEngine(reason: String) {
     DispatchQueue.main.async { [weak self] in
       guard let self = self, self.isInitialized else { return }
       let urls = self.soundfontURLs
@@ -169,6 +191,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         self.soundfontSamplers[sfId] = samplers
       }
       self.applyAllEffects()
+      print("flutter_midi_pro: audio engine rebuilt (\(reason))")
     }
   }
 

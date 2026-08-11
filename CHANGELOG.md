@@ -173,3 +173,11 @@
 - `configureAudioSession()` accepts an explicit `options` list
   (`defaultToSpeaker`, `allowBluetoothA2DP`, `mixWithOthers`, `duckOthers`,
   `allowAirPlay`) instead of only the two booleans.
+
+## 4.0.9
+
+- The engine is now **rebuilt** when an interruption ends (a phone call), not
+  just restarted. Restarting does not undo a damaged graph; rebuilding does —
+  measured on device. The rebuild reuses the path that already existed for a
+  media services reset, so the tracked soundfonts and instruments are restored.
+
