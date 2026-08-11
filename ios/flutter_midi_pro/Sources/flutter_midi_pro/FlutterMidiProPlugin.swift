@@ -23,14 +23,6 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   var soundfontIndex = 1
   var soundfontSamplers: [Int: [AVAudioUnitSampler]] = [:]
 
-  /// Session preferences requested by the app. Kept so they can be **re-applied**
-  /// after an interruption (a phone call leaves the session on the call's
-  /// hardware format) or a route change. Without this the engine keeps running
-  /// against a stale format and the output degrades audibly — it sounds
-  /// low-resolution, as if the sample rate collapsed.
-  var preferredSampleRate: Double = 44100
-  var preferredBufferSize: Int = 64
-
   /// Hardware sample rate the graph was connected at. Connections bind their
   /// format when they are made, so this is what the graph is actually running
   /// against — useful in bug reports when it disagrees with the live session.
@@ -222,7 +214,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
       object: engine
     )
 
-    rememberConnectedFormat()
+    connectedSampleRate = AVAudioSession.sharedInstance().sampleRate
     audioEngine = engine
     globalMixer = mixer
     eqNode = eq
@@ -342,9 +334,11 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         resetState()
         if let args = call.arguments as? [String: Any] {
             // Best-effort latency/sample-rate hints; the hardware may grant less.
-            preferredSampleRate = Double(args["sampleRate"] as? Int ?? 44100)
-            preferredBufferSize = args["bufferSize"] as? Int ?? 64
-            applySessionPreferences()
+            let sampleRate = Double(args["sampleRate"] as? Int ?? 44100)
+            let bufferSize = args["bufferSize"] as? Int ?? 64
+            let session = AVAudioSession.sharedInstance()
+            try? session.setPreferredSampleRate(sampleRate)
+            try? session.setPreferredIOBufferDuration(Double(bufferSize) / sampleRate)
         }
         do {
             try setupEngine()
