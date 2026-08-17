@@ -423,6 +423,13 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
             "connectedSampleRate": connectedSampleRate,
             "ioBufferDuration": session.ioBufferDuration,
             "outputChannels": session.outputNumberOfChannels,
+            "inputChannels": session.inputNumberOfChannels,
+            // Per-route hardware latencies. These are the numbers that explain
+            // why a loopback measurement moves when a headset is plugged in:
+            // the input path changes with the route (built-in mic vs headset
+            // mic) and each reports its own latency.
+            "inputLatency": session.inputLatency,
+            "outputLatency": session.outputLatency,
             "category": session.category.rawValue,
             "mode": session.mode.rawValue,
             "categoryOptions": Int(session.categoryOptions.rawValue),

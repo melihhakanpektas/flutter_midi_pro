@@ -181,3 +181,10 @@
   measured on device. The rebuild reuses the path that already existed for a
   media services reset, so the tracked soundfonts and instruments are restored.
 
+## 4.0.10
+
+- `getAudioSessionInfo()` now also reports `inputLatency`, `outputLatency` and
+  `inputChannels` (iOS). These are the per-route hardware latencies: a loopback
+  measurement moves when a headset is plugged in because the input path changes
+  with the route (built-in mic vs headset mic), and each route reports its own
+  latency. Without these numbers the shift can only be guessed at.
