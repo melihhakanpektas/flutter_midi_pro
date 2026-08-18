@@ -57,6 +57,35 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     NotificationCenter.default.removeObserver(self)
   }
 
+  // MARK: - Audio event log
+  //
+  // Reports of "a note sounds again at the end of a measurement" cannot be
+  // diagnosed from state snapshots: the interesting part is the ORDER of
+  // transitions inside the last second (route change, interruption, engine
+  // stop/restart) and who caused them — this plugin or the recorder plugin
+  // that manages the same session. Every handler appends one line here and
+  // `getAudioEvents` hands the buffer to Dart, so a device can report the
+  // sequence without a cable attached.
+  private var audioEvents: [String] = []
+  private let eventClock = Date()
+
+  private func logEvent(_ message: String) {
+    let ms = Int(Date().timeIntervalSince(eventClock) * 1000)
+    let line = "\(ms) \(message)"
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.audioEvents.append(line)
+      if self.audioEvents.count > 80 { self.audioEvents.removeFirst() }
+    }
+  }
+
+  private func routeDescription() -> String {
+    let route = AVAudioSession.sharedInstance().currentRoute
+    let out = route.outputs.map { $0.portType.rawValue }.joined(separator: "+")
+    let inp = route.inputs.map { $0.portType.rawValue }.joined(separator: "+")
+    return "out=\(out.isEmpty ? "-" : out) in=\(inp.isEmpty ? "-" : inp)"
+  }
+
   private func setupAudioSessionNotifications() {
     let session = AVAudioSession.sharedInstance()
     NotificationCenter.default.addObserver(
@@ -89,6 +118,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     switch type {
     case .began:
       // Interruption began - the engine is stopped automatically by the system.
+      logEvent("interruption began")
       break
     case .ended:
       var shouldResume = true
@@ -110,12 +140,16 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
 
   /// Headphone unplug / Bluetooth connect changes the hardware format.
   @objc private func handleRouteChange(notification: Notification) {
+    let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+    let running = audioEngine?.isRunning ?? false
+    logEvent("route change reason=\(reasonValue) running=\(running) \(routeDescription())")
     restartEngineIfNeeded()
   }
 
   /// Output hardware/format changed: the engine stops and must be restarted
   /// (connections are re-made automatically by AVAudioEngine).
   @objc private func handleEngineConfigurationChange(notification: Notification) {
+    logEvent("engine configuration changed running=\(audioEngine?.isRunning ?? false)")
     restartEngineIfNeeded()
   }
 
@@ -132,6 +166,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     DispatchQueue.main.async { [weak self] in
       guard let self = self, let engine = self.audioEngine, !engine.isRunning
       else { return }
+      self.logEvent("engine was stopped -> restarting")
       // An interruption can leave the audio session deactivated, in which
       // case starting the engine fails until it is re-activated (PR #55).
       try? AVAudioSession.sharedInstance().setActive(true)
@@ -166,6 +201,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
   private func rebuildEngine(reason: String) {
     DispatchQueue.main.async { [weak self] in
       guard let self = self, self.isInitialized else { return }
+      self.logEvent("rebuilding engine (\(reason))")
       let urls = self.soundfontURLs
       let programs = self.soundfontPrograms
       self.soundfontSamplers = [:]
@@ -413,6 +449,9 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
         }
+    case "getAudioEvents":
+        // Diagnostics: timestamped transitions (route/interruption/engine).
+        result(audioEvents)
     case "getAudioSessionInfo":
         // Diagnostics for "the audio suddenly sounds low-resolution" reports:
         // the live hardware format plus the format the graph is running
@@ -460,6 +499,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let args = call.arguments as? [String: Any] ?? [:]
         let enabled = args["enabled"] as? Bool ?? false
         do {
+            logEvent("overrideOutputToSpeaker(\(enabled)) before \(routeDescription())")
             try AVAudioSession.sharedInstance().overrideOutputAudioPort(enabled ? .speaker : .none)
             result(nil)
         } catch {

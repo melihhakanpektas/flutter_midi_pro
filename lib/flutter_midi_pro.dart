@@ -663,6 +663,17 @@ class MidiPro {
     return FlutterMidiProPlatform.instance.getAudioSessionInfo();
   }
 
+  /// Timestamped audio transitions of the last minute (iOS): route changes and
+  /// their reason, interruptions, engine stops/restarts/rebuilds and output
+  /// overrides. Diagnostics only — a state snapshot cannot show the ORDER of
+  /// transitions, which is what matters when a note is heard again at the end
+  /// of a flow that changes the route.
+  ///
+  /// Empty on platforms without an implementation.
+  Future<List<String>> getAudioEvents() async {
+    return FlutterMidiProPlatform.instance.getAudioEvents();
+  }
+
   /// Configures the reverb applied to all soundfonts.
   /// [roomSize] (0.0-1.0), [damping] (0.0-1.0), [width] (0.0-100.0) and
   /// [level] (0.0-1.0) follow the FluidSynth reverb parameters.

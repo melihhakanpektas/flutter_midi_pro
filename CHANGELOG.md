@@ -188,3 +188,15 @@
   measurement moves when a headset is plugged in because the input path changes
   with the route (built-in mic vs headset mic), and each route reports its own
   latency. Without these numbers the shift can only be guessed at.
+
+## 4.0.11
+
+- Added `getAudioEvents()` (iOS): a timestamped log of the last audio
+  transitions — route changes with their reason, interruptions, engine
+  stops/restarts/rebuilds and output overrides.
+
+  A state snapshot cannot explain "a note is heard again at the end of a flow
+  that changes the route": what matters is the ORDER of transitions inside the
+  last second, and whether the engine was stopped when a silence command was
+  sent. Two plugins share one AVAudioSession here (this one and the recorder),
+  so the log also shows who moved first.
