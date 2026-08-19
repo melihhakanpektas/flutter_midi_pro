@@ -200,3 +200,13 @@
   last second, and whether the engine was stopped when a silence command was
   sent. Two plugins share one AVAudioSession here (this one and the recorder),
   so the log also shows who moved first.
+
+## 4.0.12
+
+- `stopAllNotes()` now also sends All Notes Off (CC 123) before All Sound Off
+  (CC 120). A sampled piano keeps decaying for seconds after a note is
+  released, and a tail that is still sounding when the audio route changes is
+  audibly chopped — "the sound cuts and comes back". CC 123 is the second belt
+  for samplers that ignore CC 120.
+- `getAudioEvents()` also logs note on/off and stopAllNotes, so the order of
+  "was it still ringing when the route moved?" can be read off a device.

@@ -594,10 +594,16 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
             result(nil)
             return
         }
+        logEvent("stopAllNotes")
         soundfontSampler.forEach { (sampler) in
-            // Sustain'i kapat (CC 64 -> 0) ve anında sesi kes (All Sound Off, CC 120 -> 0)
+            // Sustain'i kapat (CC 64 -> 0), çalan notaları bırak (All Notes Off,
+            // CC 123 -> 0) ve anında sesi kes (All Sound Off, CC 120 -> 0).
+            // 123, 120'yi yok sayan örnekleyicilere karşı ikinci kemer: bir
+            // piyano örneği nota bırakıldıktan sonra da saniyelerce söner ve o
+            // kuyruk rota değişimine yakalanırsa duyulur biçimde bölünür.
             for channel in 0...15 {
                 sampler.sendController(64, withValue: 0, onChannel: UInt8(channel))
+                sampler.sendController(123, withValue: 0, onChannel: UInt8(channel))
                 sampler.sendController(120, withValue: 0, onChannel: UInt8(channel))
             }
         }
@@ -637,6 +643,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let args = call.arguments as! [String: Any]
         let channel = args["channel"] as! Int
         let note = args["key"] as! Int
+        logEvent("noteOn key=\(note) ch=\(channel)")
         let velocity = args["velocity"] as! Int
         let sfId = args["sfId"] as! Int
         // Self-heal if a missed notification left the engine stopped (PR #55).
@@ -655,6 +662,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         let channel = args["channel"] as! Int
         let note = args["key"] as! Int
         let sfId = args["sfId"] as! Int
+        logEvent("noteOff key=\(args["key"] as? Int ?? -1)")
         guard let soundfontSampler = samplerFor(sfId: sfId, channel: channel) else {
             result(nil)
             return
