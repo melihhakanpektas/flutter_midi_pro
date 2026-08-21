@@ -245,6 +245,9 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     case "getAudioRoute":
         // Mobile-only route categories; the desktop output is opaque here.
         result("other")
+    case "getAudioRouteDetail":
+        // Mobile-only (bkz. getAudioRoute); desktop output is opaque here.
+        result(["type": "other", "name": ""])
     case "setReverb":
         let args = call.arguments as! [String: Any]
         reverbParams = (

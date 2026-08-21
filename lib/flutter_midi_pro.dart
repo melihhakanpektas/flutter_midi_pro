@@ -643,6 +643,18 @@ class MidiPro {
     return FlutterMidiProPlatform.instance.getAudioRoute();
   }
 
+  /// [getAudioRoute]'un ad taşıyan hâli: `{'type': 'wired', 'name': 'USB-C to
+  /// 3.5mm Headphone Jack Adapter'}`. `type` aynı route kategorisidir, ama
+  /// aynı kategorinin FARKLI aygıtlarını (iki farklı kablolu kulaklık) ayırt
+  /// eder — kombinasyon başına kalibrasyon anahtarı için (muzik_prova plan 52).
+  ///
+  /// **iOS:** `AVAudioSessionPortDescription.portName`. **Android:**
+  /// `AudioDeviceInfo.productName`. **macOS:** her zaman `{'type': 'other',
+  /// 'name': ''}`. Can be called before [init].
+  Future<Map<String, Object?>> getAudioRouteDetail() async {
+    return FlutterMidiProPlatform.instance.getAudioRouteDetail();
+  }
+
   /// Diagnostics for the audio session (iOS only; empty elsewhere).
   ///
   /// Returns the live hardware format together with the format the engine

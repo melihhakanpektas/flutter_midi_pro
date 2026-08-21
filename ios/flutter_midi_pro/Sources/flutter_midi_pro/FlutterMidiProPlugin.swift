@@ -491,6 +491,25 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
             route = "other"
         }
         result(route)
+    case "getAudioRouteDetail":
+        // Type + device name, so latency-sensitive callers can key state per
+        // physical accessory rather than per route category (two different
+        // wired headsets are the same "wired" route but need separate
+        // calibrations).
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        let first = outputs.first
+        let type: String
+        switch first?.portType {
+        case .builtInSpeaker?, .builtInReceiver?:
+            type = "speaker"
+        case .headphones?, .usbAudio?:
+            type = "wired"
+        case .bluetoothA2DP?, .bluetoothHFP?, .bluetoothLE?:
+            type = "bluetooth"
+        default:
+            type = "other"
+        }
+        result(["type": type, "name": first?.portName ?? ""])
     case "overrideOutputToSpeaker":
         // Loopback measurements must play from the built-in speaker even when
         // headphones/Bluetooth are connected. Only effective while the session

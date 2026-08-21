@@ -328,6 +328,32 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
         result.success(route)
       }
+      "getAudioRouteDetail" -> {
+        // Type + device name, so latency-sensitive callers can key state per
+        // physical accessory rather than per route category (two different
+        // wired headsets are the same "wired" route but need separate
+        // calibrations). Same precedence as getAudioRoute (Bluetooth > wired/
+        // USB > built-in speaker); the picked device's own name is reported.
+        val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: emptyArray()
+        val picked = devices.firstOrNull {
+          it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+          it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        } ?: devices.firstOrNull {
+          it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+          it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+          it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+          it.type == AudioDeviceInfo.TYPE_USB_DEVICE
+        } ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val type = when (picked?.type) {
+          AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "bluetooth"
+          AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+          AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "wired"
+          AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+          else -> "other"
+        }
+        result.success(mapOf("type" to type, "name" to (picked?.productName?.toString() ?: "")))
+      }
       "overrideOutputToSpeaker" -> {
         // Loopback measurements must play from the built-in speaker even when
         // headphones/Bluetooth are connected. The native driver is rebound to

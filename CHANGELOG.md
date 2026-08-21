@@ -201,6 +201,15 @@
   sent. Two plugins share one AVAudioSession here (this one and the recorder),
   so the log also shows who moved first.
 
+## 4.0.13
+
+- Added `getAudioRouteDetail()`: like `getAudioRoute()` but also reports the
+  device name (`{'type': 'wired', 'name': 'USB-C to 3.5mm Headphone Jack
+  Adapter'}`), so a caller can tell two accessories of the same route category
+  apart (two different wired headsets are both `'wired'` but may need separate
+  per-device state). iOS reads `portName`, Android `productName`, macOS always
+  reports an empty name.
+
 ## 4.0.12
 
 - `stopAllNotes()` now also sends All Notes Off (CC 123) before All Sound Off

@@ -182,6 +182,13 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   }
 
   @override
+  Future<Map<String, Object?>> getAudioRouteDetail() async {
+    final detail = await _channel
+        .invokeMapMethod<String, Object?>('getAudioRouteDetail');
+    return detail ?? const {'type': 'other', 'name': ''};
+  }
+
+  @override
   Future<void> setEqualizer(bool enabled, double bassGain, double midGain, double trebleGain) async {
     await _channel.invokeMethod('setEqualizer', {
       'enabled': enabled,
