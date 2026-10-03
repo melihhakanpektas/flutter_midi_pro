@@ -146,6 +146,11 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
     throw UnimplementedError('getAudioRouteDetail() has not been implemented.');
   }
 
+  /// Çıkış rotası her değiştiğinde [getAudioRouteDetail] biçiminde detay
+  /// yayar. Varsayılan: hiç olay yok (macOS / test platformları).
+  Stream<Map<String, Object?>> get audioRouteChanges =>
+      const Stream<Map<String, Object?>>.empty();
+
   Future<void> setReverb(bool enabled, double roomSize, double damping, double width, double level) {
     throw UnimplementedError('setReverb() has not been implemented.');
   }

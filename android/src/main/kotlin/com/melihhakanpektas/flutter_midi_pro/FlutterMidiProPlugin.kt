@@ -1,9 +1,13 @@
 package com.melihhakanpektas.flutter_midi_pro
 
 import android.content.Context
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -132,10 +136,69 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
   // engine warm and only a long-disposed engine is actually shut down.
   private var idleShutdownJob: Job? = null
 
+  private var routeChannel: EventChannel? = null
+  private var routeSink: EventChannel.EventSink? = null
+  private var lastRouteDetail: Map<String, String>? = null
+
+  // Kulaklık takıldı/çıkarıldı, BT bağlandı/ayrıldı → Dart'a yeni detay.
+  // Aynı aksesuar birden çok uç nokta (çıkış + mikrofon) eklediği için birkaç
+  // olay gelir; yalnız detay DEĞİŞTİYSE yayılır.
+  private val deviceCallback = object : AudioDeviceCallback() {
+    override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = emitRouteIfChanged()
+    override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = emitRouteIfChanged()
+  }
+
+  private fun emitRouteIfChanged() {
+    val detail = routeDetail()
+    if (detail == lastRouteDetail) return
+    lastRouteDetail = detail
+    routeSink?.success(detail)
+  }
+
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro")
     channel.setMethodCallHandler(this)
     context = flutterPluginBinding.applicationContext
+    routeChannel = EventChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro/route_changes").also {
+      it.setStreamHandler(object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+          routeSink = events
+          lastRouteDetail = routeDetail()
+          val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+          audioManager?.registerAudioDeviceCallback(deviceCallback, Handler(Looper.getMainLooper()))
+        }
+
+        override fun onCancel(arguments: Any?) {
+          val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+          audioManager?.unregisterAudioDeviceCallback(deviceCallback)
+          routeSink = null
+        }
+      })
+    }
+  }
+
+  /// Çıkış rotası detayı (`getAudioRouteDetail` ve olay akışı AYNI hesabı
+  /// kullanır). Öncelik: Bluetooth > kablolu/USB > dahili hoparlör.
+  private fun routeDetail(): Map<String, String> {
+    val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: emptyArray()
+    val picked = devices.firstOrNull {
+      it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+      it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+    } ?: devices.firstOrNull {
+      it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+      it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+      it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+      it.type == AudioDeviceInfo.TYPE_USB_DEVICE
+    } ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+    val type = when (picked?.type) {
+      AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "bluetooth"
+      AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+      AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "wired"
+      AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+      else -> "other"
+    }
+    return mapOf("type" to type, "name" to (picked?.productName?.toString() ?: ""))
   }
 
   /// The AudioDeviceInfo id of the built-in speaker, or 0 if not found
@@ -332,27 +395,8 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         // Type + device name, so latency-sensitive callers can key state per
         // physical accessory rather than per route category (two different
         // wired headsets are the same "wired" route but need separate
-        // calibrations). Same precedence as getAudioRoute (Bluetooth > wired/
-        // USB > built-in speaker); the picked device's own name is reported.
-        val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-        val devices = audioManager?.getDevices(AudioManager.GET_DEVICES_OUTPUTS) ?: emptyArray()
-        val picked = devices.firstOrNull {
-          it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-          it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-        } ?: devices.firstOrNull {
-          it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-          it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-          it.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
-          it.type == AudioDeviceInfo.TYPE_USB_DEVICE
-        } ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-        val type = when (picked?.type) {
-          AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "bluetooth"
-          AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
-          AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> "wired"
-          AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
-          else -> "other"
-        }
-        result.success(mapOf("type" to type, "name" to (picked?.productName?.toString() ?: "")))
+        // calibrations). Same precedence as getAudioRoute.
+        result.success(routeDetail())
       }
       "overrideOutputToSpeaker" -> {
         // Loopback measurements must play from the built-in speaker even when
@@ -475,6 +519,10 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
+    (context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)
+      ?.unregisterAudioDeviceCallback(deviceCallback)
+    routeChannel?.setStreamHandler(null)
+    routeSink = null
     // Fully release the audio engine and all loaded soundfonts if the app is
     // torn down without calling dispose().
     idleShutdownJob?.cancel()

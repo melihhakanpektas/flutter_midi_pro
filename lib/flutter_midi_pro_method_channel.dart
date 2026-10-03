@@ -6,6 +6,8 @@ import 'package:flutter_midi_pro/flutter_midi_pro_platform_interface.dart';
 /// An implementation of [FlutterMidiProPlatform] that uses method channels.
 class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   static const MethodChannel _channel = MethodChannel('flutter_midi_pro');
+  static const EventChannel _routeChannel =
+      EventChannel('flutter_midi_pro/route_changes');
 
   @override
   Future<void> init(int sampleRate, int bufferSize, int polyphony) async {
@@ -187,6 +189,17 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
         .invokeMapMethod<String, Object?>('getAudioRouteDetail');
     return detail ?? const {'type': 'other', 'name': ''};
   }
+
+  Stream<Map<String, Object?>>? _routeChanges;
+
+  @override
+  Stream<Map<String, Object?>> get audioRouteChanges =>
+      _routeChanges ??= _routeChannel
+          .receiveBroadcastStream()
+          .map((e) => Map<String, Object?>.from(e as Map))
+          // Native kanal yoksa (macOS) akış sessizce boş kalır.
+          .handleError((Object _) {}, test: (e) => e is MissingPluginException)
+          .asBroadcastStream();
 
   @override
   Future<void> setEqualizer(bool enabled, double bassGain, double midGain, double trebleGain) async {

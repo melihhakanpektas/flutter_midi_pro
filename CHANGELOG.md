@@ -219,3 +219,13 @@
   for samplers that ignore CC 120.
 - `getAudioEvents()` also logs note on/off and stopAllNotes, so the order of
   "was it still ringing when the route moved?" can be read off a device.
+
+## 4.0.14
+
+- `audioRouteChanges`: a stream that emits the `getAudioRouteDetail()` map
+  whenever the output device changes (headphones plugged/unplugged, Bluetooth
+  connected/disconnected). Android uses `AudioDeviceCallback`; iOS forwards
+  `routeChangeNotification` only for `newDeviceAvailable` /
+  `oldDeviceUnavailable` (category changes and speaker overrides are not
+  device changes). Repeated identical details are suppressed. macOS: no
+  events.

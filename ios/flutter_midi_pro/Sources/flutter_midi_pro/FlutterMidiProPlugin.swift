@@ -12,7 +12,7 @@ import CoreAudio
 /// Effects are neutral (bypassed / dry) until configured from Dart. A single
 /// engine means one recovery point for interruptions/route changes and one
 /// insertion point for effects, instead of 16 engines per soundfont.
-public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
+public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   var audioEngine: AVAudioEngine?
   var globalMixer: AVAudioMixerNode?
   var eqNode: AVAudioUnitEQ?
@@ -46,6 +46,57 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     let channel = FlutterMethodChannel(name: "flutter_midi_pro", binaryMessenger: registrar.messenger())
     let instance = FlutterMidiProPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
+    let routeChannel = FlutterEventChannel(
+      name: "flutter_midi_pro/route_changes", binaryMessenger: registrar.messenger())
+    routeChannel.setStreamHandler(instance)
+  }
+
+  // MARK: - Route change events
+  private var routeSink: FlutterEventSink?
+  private var lastRouteDetail: [String: String]?
+
+  public func onListen(withArguments arguments: Any?,
+                       eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    routeSink = events
+    lastRouteDetail = routeDetail()
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    routeSink = nil
+    return nil
+  }
+
+  /// Çıkış rotası detayı — `getAudioRouteDetail` ve olay akışı AYNI hesabı
+  /// kullanır.
+  private func routeDetail() -> [String: String] {
+    let first = AVAudioSession.sharedInstance().currentRoute.outputs.first
+    let type: String
+    switch first?.portType {
+    case .builtInSpeaker?, .builtInReceiver?:
+      type = "speaker"
+    case .headphones?, .usbAudio?:
+      type = "wired"
+    case .bluetoothA2DP?, .bluetoothHFP?, .bluetoothLE?:
+      type = "bluetooth"
+    default:
+      type = "other"
+    }
+    return ["type": type, "name": first?.portName ?? ""]
+  }
+
+  /// Yalnız aygıt takılıp çıkarıldığında yayar: kategori değişimi (kayıt
+  /// başlaması) ve `overrideOutputAudioPort` (ölçüm sondaları) da route
+  /// change bildirimi üretir ama kullanıcının kurulumu değişmemiştir.
+  private func emitRouteIfDeviceChanged(reason: AVAudioSession.RouteChangeReason) {
+    guard reason == .newDeviceAvailable || reason == .oldDeviceUnavailable else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self, let sink = self.routeSink else { return }
+      let detail = self.routeDetail()
+      if detail == self.lastRouteDetail { return }
+      self.lastRouteDetail = detail
+      sink(detail)
+    }
   }
 
   public override init() {
@@ -144,6 +195,9 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     let running = audioEngine?.isRunning ?? false
     logEvent("route change reason=\(reasonValue) running=\(running) \(routeDescription())")
     restartEngineIfNeeded()
+    if let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) {
+      emitRouteIfDeviceChanged(reason: reason)
+    }
   }
 
   /// Output hardware/format changed: the engine stops and must be restarted
@@ -496,20 +550,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
         // physical accessory rather than per route category (two different
         // wired headsets are the same "wired" route but need separate
         // calibrations).
-        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
-        let first = outputs.first
-        let type: String
-        switch first?.portType {
-        case .builtInSpeaker?, .builtInReceiver?:
-            type = "speaker"
-        case .headphones?, .usbAudio?:
-            type = "wired"
-        case .bluetoothA2DP?, .bluetoothHFP?, .bluetoothLE?:
-            type = "bluetooth"
-        default:
-            type = "other"
-        }
-        result(["type": type, "name": first?.portName ?? ""])
+        result(routeDetail())
     case "overrideOutputToSpeaker":
         // Loopback measurements must play from the built-in speaker even when
         // headphones/Bluetooth are connected. Only effective while the session

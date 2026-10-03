@@ -655,6 +655,15 @@ class MidiPro {
     return FlutterMidiProPlatform.instance.getAudioRouteDetail();
   }
 
+  /// Çıkış rotası değiştiğinde (kulaklık takıldı/çıkarıldı, Bluetooth
+  /// bağlandı/ayrıldı) [getAudioRouteDetail] biçiminde yeni detayı yayar;
+  /// aynı detay art arda yayılmaz.
+  ///
+  /// **Android:** `AudioDeviceCallback`. **iOS:**
+  /// `AVAudioSession.routeChangeNotification`. **macOS:** olay yok.
+  Stream<Map<String, Object?>> get audioRouteChanges =>
+      FlutterMidiProPlatform.instance.audioRouteChanges;
+
   /// Diagnostics for the audio session (iOS only; empty elsewhere).
   ///
   /// Returns the live hardware format together with the format the engine
