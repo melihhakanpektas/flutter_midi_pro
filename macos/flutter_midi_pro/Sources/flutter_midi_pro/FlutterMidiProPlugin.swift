@@ -242,6 +242,11 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin {
     case "overrideOutputToSpeaker":
         // Mobile-only; there is no AVAudioSession routing on macOS.
         result(nil)
+    case "acquireAudioFocus":
+        // Mobile-only; no audio focus/session on macOS.
+        result(true)
+    case "releaseAudioFocus":
+        result(nil)
     case "getAudioRoute":
         // Mobile-only route categories; the desktop output is opaque here.
         result("other")

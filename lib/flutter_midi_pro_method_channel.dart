@@ -8,6 +8,8 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
   static const MethodChannel _channel = MethodChannel('flutter_midi_pro');
   static const EventChannel _routeChannel =
       EventChannel('flutter_midi_pro/route_changes');
+  static const EventChannel _focusChannel =
+      EventChannel('flutter_midi_pro/focus_changes');
 
   @override
   Future<void> init(int sampleRate, int bufferSize, int polyphony) async {
@@ -197,6 +199,42 @@ class MethodChannelFlutterMidiPro extends FlutterMidiProPlatform {
       _routeChanges ??= _routeChannel
           .receiveBroadcastStream()
           .map((e) => Map<String, Object?>.from(e as Map))
+          // Native kanal yoksa (macOS) akış sessizce boş kalır.
+          .handleError((Object _) {}, test: (e) => e is MissingPluginException)
+          .asBroadcastStream();
+
+  @override
+  Future<bool> acquireAudioFocus() async {
+    try {
+      return await _channel.invokeMethod<bool>('acquireAudioFocus') ?? false;
+    } on MissingPluginException {
+      // Odak kavramı olmayan platform: çalmaya engel yok.
+      return true;
+    }
+  }
+
+  @override
+  Future<void> releaseAudioFocus({
+    bool deactivateSession = true,
+    bool reactivate = true,
+  }) async {
+    try {
+      await _channel.invokeMethod('releaseAudioFocus', {
+        'deactivateSession': deactivateSession,
+        'reactivate': reactivate,
+      });
+    } on MissingPluginException {
+      // Odak kavramı olmayan platform: bırakılacak bir şey yok.
+    }
+  }
+
+  Stream<String>? _focusChanges;
+
+  @override
+  Stream<String> get audioFocusChanges =>
+      _focusChanges ??= _focusChannel
+          .receiveBroadcastStream()
+          .map((e) => e as String)
           // Native kanal yoksa (macOS) akış sessizce boş kalır.
           .handleError((Object _) {}, test: (e) => e is MissingPluginException)
           .asBroadcastStream();

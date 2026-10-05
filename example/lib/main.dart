@@ -31,6 +31,9 @@ class _MyAppState extends State<MyApp> {
   final pitchBendValue = ValueNotifier<double>(8192);
   final bendRange = ValueNotifier<int>(2);
   final sessionMixWithOthers = ValueNotifier<bool>(true);
+  final focusHeld = ValueNotifier<bool>(false);
+  final lastFocusChange = ValueNotifier<AudioFocusChange?>(null);
+  StreamSubscription<AudioFocusChange>? focusSubscription;
   final reverbOn = ValueNotifier<bool>(false);
   final reverbRoomSize = ValueNotifier<double>(0.4);
   final chorusOn = ValueNotifier<bool>(false);
@@ -52,6 +55,8 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    focusSubscription?.cancel();
+    if (focusHeld.value) midiPro.releaseAudioFocus();
     shutdownTimer?.cancel();
     midiPollTimer?.cancel();
     if (midiPro.isInitialized) midiPro.dispose();
@@ -215,6 +220,25 @@ class _MyAppState extends State<MyApp> {
       category: AudioSessionCategory.playback,
       mixWithOthers: sessionMixWithOthers.value,
     );
+  }
+
+  /// Holds audio focus while switched on: other apps' music pauses and
+  /// resumes when focus is released. Call it around a practice/recording
+  /// session, not around a single note.
+  Future<void> setFocus(bool hold) async {
+    focusSubscription ??= midiPro.audioFocusChanges
+        .listen((change) => lastFocusChange.value = change);
+    if (hold) {
+      focusHeld.value = await midiPro.acquireAudioFocus();
+    } else {
+      // Silence and let the tail decay before the iOS category change.
+      if (selectedSfId.value != null) {
+        await midiPro.stopAllNotes(sfId: selectedSfId.value!);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      await midiPro.releaseAudioFocus();
+      focusHeld.value = false;
+    }
   }
 
   Future<void> applyReverb() =>
@@ -440,6 +464,25 @@ class _MyAppState extends State<MyApp> {
                           sessionMixWithOthers.value = value;
                           applyAudioSession();
                         },
+                      );
+                    },
+                  ),
+                  ValueListenableBuilder(
+                    valueListenable: focusHeld,
+                    builder: (context, held, child) {
+                      return ValueListenableBuilder(
+                        valueListenable: lastFocusChange,
+                        builder: (context, change, child) => SwitchListTile(
+                          dense: true,
+                          title: const Text('Hold audio focus'),
+                          subtitle: Text(
+                            'acquireAudioFocus / releaseAudioFocus — pauses other '
+                            'apps\' music for the session and lets it resume after. '
+                            'Last change: ${change?.name ?? '-'}',
+                          ),
+                          value: held,
+                          onChanged: setFocus,
+                        ),
                       );
                     },
                   ),

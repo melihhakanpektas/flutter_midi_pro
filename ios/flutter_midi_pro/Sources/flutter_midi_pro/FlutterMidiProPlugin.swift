@@ -49,6 +49,111 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     let routeChannel = FlutterEventChannel(
       name: "flutter_midi_pro/route_changes", binaryMessenger: registrar.messenger())
     routeChannel.setStreamHandler(instance)
+    let focusChannel = FlutterEventChannel(
+      name: "flutter_midi_pro/focus_changes", binaryMessenger: registrar.messenger())
+    focusChannel.setStreamHandler(instance.focusEvents)
+  }
+
+  // MARK: - Audio focus (muzik_prova plan 62)
+  //
+  // Oturum boyu karışmayan oynatma: öbür uygulamanın müziği oturum başında
+  // durur, bitince (notifyOthersOnDeactivation) sürer. Sınıf zaten rota
+  // kanalının işleyicisi → odak akışı için ayrı işleyici nesnesi.
+  final class FocusEvents: NSObject, FlutterStreamHandler {
+    var sink: FlutterEventSink?
+
+    func onListen(withArguments arguments: Any?,
+                  eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+      sink = events
+      return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+      sink = nil
+      return nil
+    }
+  }
+
+  let focusEvents = FocusEvents()
+  private var focusHeld = false
+
+  private func emitFocus(_ name: String) {
+    DispatchQueue.main.async { [weak self] in
+      self?.focusEvents.sink?(name)
+    }
+  }
+
+  /// Kategori karışan mı (ambient ya da karıştırma seçenekli)?
+  private func sessionMixes(_ session: AVAudioSession) -> Bool {
+    if session.category == .ambient { return true }
+    let options = session.categoryOptions
+    return options.contains(.mixWithOthers) || options.contains(.duckOthers)
+      || options.contains(.interruptSpokenAudioAndMixWithOthers)
+  }
+
+  /// Edinme: kategori zaten karışmayan ise (ör. kaydedicinin bıraktığı
+  /// `playAndRecord`) kategoriye DOKUNULMAZ — her kategori değişimi bir rota
+  /// olayıdır ve çalan kuyruğu bölebilir. Ses grafiğine dokunulmaz; motor
+  /// durmuşsa yalnız başlatılır.
+  private func acquireFocus() -> Bool {
+    let session = AVAudioSession.sharedInstance()
+    let mixes = sessionMixes(session)
+    do {
+      if mixes {
+        try session.setCategory(.playback, options: [])
+      }
+      try session.setActive(true)
+    } catch {
+      logEvent("focus acquire failed: \(error)")
+      return false
+    }
+    if let engine = audioEngine, !engine.isRunning {
+      try? engine.start()
+    }
+    focusHeld = true
+    logEvent("focus acquired category=\(session.category.rawValue)\(mixes ? " (was mixing)" : " (kept)")")
+    return true
+  }
+
+  /// Bırakma sırası şart (§44 alanı: motor durup başlar, yeniden bağlanmaz,
+  /// yeniden kurulmaz). Çağıran önce susturur ve kuyruğun sönmesini bekler;
+  /// mikrofon kapalıdır.
+  ///   1. karışan kategori
+  ///   2. motor dur
+  ///   3. oturumu kapat (notifyOthersOnDeactivation → öbür müzik sürer)
+  ///   4. karışan olarak yeniden aç (kimseyi kesmez)   — `reactivate`
+  ///   5. motoru başlat                                — `reactivate`
+  /// Hepsi tek ana iş parçacığı bloğunda: araya giren rota bildiriminin
+  /// `restartEngineIfNeeded`'ı ana kuyruğa asenkron düşer ve motoru çalışır
+  /// bulur (no-op).
+  private func releaseFocus(deactivate: Bool, reactivate: Bool) {
+    let session = AVAudioSession.sharedInstance()
+    focusHeld = false
+    do {
+      try session.setCategory(.playback, options: [.mixWithOthers])
+    } catch {
+      logEvent("focus release: setCategory failed: \(error)")
+    }
+    guard deactivate else {
+      logEvent("focus released (category only)")
+      return
+    }
+    audioEngine?.stop()
+    do {
+      try session.setActive(false, options: .notifyOthersOnDeactivation)
+    } catch {
+      // isBusy (çalan G/Ç) dahil: yok sayılır; oturum karışan kaldı.
+      logEvent("focus release: deactivate failed: \(error)")
+    }
+    guard reactivate else {
+      logEvent("focus released (session inactive, engine stopped)")
+      return
+    }
+    try? session.setActive(true)
+    if let engine = audioEngine, !engine.isRunning {
+      try? engine.start()
+    }
+    logEvent("focus released running=\(audioEngine?.isRunning ?? false)")
   }
 
   // MARK: - Route change events
@@ -170,18 +275,20 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     case .began:
       // Interruption began - the engine is stopped automatically by the system.
       logEvent("interruption began")
-      break
+      emitFocus("interruptionBegan")
     case .ended:
       var shouldResume = true
       if let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt {
         let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
         shouldResume = options.contains(.shouldResume)
       }
+      logEvent("interruption ended shouldResume=\(shouldResume)")
+      emitFocus("interruptionEnded")
       if shouldResume {
         restartEngineIfNeeded()
         // An interruption (a phone call) can leave the graph damaged in a way
-        // restarting does not undo. Rebuild — deferred if a recorder currently
-        // owns the session.
+        // restarting does not undo. Rebuild (not deferred while a recorder
+        // holds the session — see rebuildEngine).
         rebuildEngine(reason: "interruption ended")
       }
     @unknown default:
@@ -503,6 +610,14 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
         }
+    case "acquireAudioFocus":
+        result(acquireFocus())
+    case "releaseAudioFocus":
+        let args = call.arguments as? [String: Any] ?? [:]
+        releaseFocus(
+            deactivate: args["deactivateSession"] as? Bool ?? true,
+            reactivate: args["reactivate"] as? Bool ?? true)
+        result(nil)
     case "getAudioEvents":
         // Diagnostics: timestamped transitions (route/interruption/engine).
         result(audioEvents)
@@ -528,6 +643,7 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
             "categoryOptions": Int(session.categoryOptions.rawValue),
             "outputs": session.currentRoute.outputs.map { $0.portType.rawValue },
             "inputs": session.currentRoute.inputs.map { $0.portType.rawValue },
+            "focusHeld": focusHeld,
         ])
     case "getAudioRoute":
         // Route category for latency-sensitive callers (calibrations are tied

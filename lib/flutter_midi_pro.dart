@@ -38,6 +38,36 @@ enum AudioSessionCategory {
   playAndRecord,
 }
 
+/// [MidiPro.audioFocusChanges] olayları.
+enum AudioFocusChange {
+  /// Android: odak (yeniden) alındı.
+  gain,
+
+  /// Android: kalıcı kayıp — başka uygulama oynatmaya başladı. Eklenti odağı
+  /// geri istemez.
+  loss,
+
+  /// Android: geçici kayıp (arama, asistan); bitince [gain] gelir.
+  lossTransient,
+
+  /// Android: geçici kayıp, kısarak sürmeye izin var (bildirim sesi).
+  lossTransientCanDuck,
+
+  /// iOS: oturum kesintisi başladı (başka uygulamanın karışmayan sesi,
+  /// arama, Siri).
+  interruptionBegan,
+
+  /// iOS: oturum kesintisi bitti.
+  interruptionEnded;
+
+  static AudioFocusChange? fromName(String name) {
+    for (final c in values) {
+      if (c.name == name) return c;
+    }
+    return null;
+  }
+}
+
 /// Factory presets of the iOS/macOS distortion effect
 /// (AVAudioUnitDistortionPreset, in raw-value order).
 enum DistortionPreset {
@@ -663,6 +693,60 @@ class MidiPro {
   /// `AVAudioSession.routeChangeNotification`. **macOS:** olay yok.
   Stream<Map<String, Object?>> get audioRouteChanges =>
       FlutterMidiProPlatform.instance.audioRouteChanges;
+
+  /// Ses odağını **oturum boyunca** ister: başka uygulamaların müziği
+  /// duraklar, odak bırakılınca kaldığı yerden sürer.
+  ///
+  /// **Android:** `AUDIOFOCUS_GAIN_TRANSIENT` (`USAGE_MEDIA`,
+  /// `CONTENT_TYPE_MUSIC`). Kalıcı kayıptan ([AudioFocusChange.loss]) sonra
+  /// eklenti odağı kendiliğinden geri **istemez** — yeniden istemek
+  /// çağıranın kararıdır (Android: kalıcı kayıptan sonra kullanıcının açık
+  /// bir eylemi gerekir).
+  /// **iOS:** oturum karışmayan bir kategoriye geçer ve etkinleşir. Kategori
+  /// zaten karışmayan ise (ör. bir kaydedicinin bıraktığı `playAndRecord`)
+  /// kategoriye dokunulmaz — kategori değişimi rota olayı üretir. Motor
+  /// durmuşsa başlatılır; ses grafiği yeniden bağlanmaz.
+  /// **macOS:** no-op, `true`.
+  ///
+  /// İdempotent. Odak verilmediyse `false`.
+  Future<bool> acquireAudioFocus() =>
+      FlutterMidiProPlatform.instance.acquireAudioFocus();
+
+  /// [acquireAudioFocus] ile alınan odağı bırakır. İdempotent.
+  ///
+  /// Çağırmadan önce sesi sustur ve kuyruğun sönmesini bekle (çalan nota
+  /// iOS'taki kategori değişiminde bölünür).
+  ///
+  /// **Android:** odak bırakılır; duraklayan müzik sürer.
+  /// **iOS:** kategori yeniden karışan `playback` olur. [deactivateSession]
+  /// ise sırasıyla motor durur, oturum `notifyOthersOnDeactivation` ile
+  /// kapanır (öbür uygulamanın müziği sürer), ardından — [reactivate] ise —
+  /// oturum karışan olarak yeniden açılır ve motor başlar (yeniden bağlama ya
+  /// da kurma yok). [reactivate] `false` iken oturum kapalı, motor durmuş
+  /// kalır; sonraki [acquireAudioFocus] ya da [playNote] açar (uygulama arka
+  /// plandayken etkinleştirme reddedilebilir). [deactivateSession] `false`
+  /// iken yalnız kategori değişir, motor hiç durmaz (müzik geri gelmez).
+  /// **macOS:** no-op.
+  Future<void> releaseAudioFocus({
+    bool deactivateSession = true,
+    bool reactivate = true,
+  }) =>
+      FlutterMidiProPlatform.instance.releaseAudioFocus(
+        deactivateSession: deactivateSession,
+        reactivate: reactivate,
+      );
+
+  /// Ses odağı değişimleri. **Android:** odak dinleyicisi ([AudioFocusChange.gain],
+  /// [AudioFocusChange.loss], [AudioFocusChange.lossTransient],
+  /// [AudioFocusChange.lossTransientCanDuck]); yalnız odak tutulurken gelir.
+  /// **iOS:** oturum kesintisi ([AudioFocusChange.interruptionBegan],
+  /// [AudioFocusChange.interruptionEnded]) — bilgi amaçlı; eklentinin kesinti
+  /// sonrası motoru yeniden kurma yolu aynen çalışır. **macOS:** olay yok.
+  Stream<AudioFocusChange> get audioFocusChanges => FlutterMidiProPlatform
+      .instance.audioFocusChanges
+      .map(AudioFocusChange.fromName)
+      .where((c) => c != null)
+      .cast<AudioFocusChange>();
 
   /// Diagnostics for the audio session (iOS only; empty elsewhere).
   ///

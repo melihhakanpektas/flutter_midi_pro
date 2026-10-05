@@ -1,9 +1,12 @@
 package com.melihhakanpektas.flutter_midi_pro
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -148,6 +151,70 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
     override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = emitRouteIfChanged()
   }
 
+  private var focusChannel: EventChannel? = null
+  private var focusSink: EventChannel.EventSink? = null
+  private var focusRequest: AudioFocusRequest? = null
+  private var focusHeld = false
+
+  // Oturum boyu ses odağı (muzik_prova plan 62). Kalıcı kayıpta (LOSS) odak
+  // geri İSTENMEZ: Android'e göre kalıcı kayıptan sonra kullanıcının açık bir
+  // eylemi gerekir — yeniden isteme kararı Dart'ta.
+  private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+    val name = when (change) {
+      AudioManager.AUDIOFOCUS_GAIN -> "gain"
+      AudioManager.AUDIOFOCUS_LOSS -> "loss"
+      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "lossTransient"
+      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> "lossTransientCanDuck"
+      else -> return@OnAudioFocusChangeListener
+    }
+    when (change) {
+      AudioManager.AUDIOFOCUS_GAIN -> focusHeld = true
+      AudioManager.AUDIOFOCUS_LOSS -> focusHeld = false
+    }
+    focusSink?.success(name)
+  }
+
+  /// GAIN_TRANSIENT: oturum bitince müzik kaldığı yerden sürer (GAIN'de
+  /// sürmez). EXCLUSIVE değil: oturum dakikalar sürer, bildirimleri o kadar
+  /// bastırmak "kısa süre" tanımını aşar. MAY_DUCK değil: kısılan müzik
+  /// mikrofona sızar. İdempotent: aynı istemcinin tekrar isteği yığını
+  /// değiştirmez.
+  private fun acquireFocus(): Boolean {
+    val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+    val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val request = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+        .setAudioAttributes(
+          AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+        )
+        .setAcceptsDelayedFocusGain(false)
+        .setWillPauseWhenDucked(false)
+        .setOnAudioFocusChangeListener(focusListener, Handler(Looper.getMainLooper()))
+        .build()
+        .also { focusRequest = it }
+      audioManager.requestAudioFocus(request)
+    } else {
+      @Suppress("DEPRECATION")
+      audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC,
+        AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+    }
+    focusHeld = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    return focusHeld
+  }
+
+  private fun releaseFocus() {
+    val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+    } else {
+      @Suppress("DEPRECATION")
+      audioManager.abandonAudioFocus(focusListener)
+    }
+    focusHeld = false
+  }
+
   private fun emitRouteIfChanged() {
     val detail = routeDetail()
     if (detail == lastRouteDetail) return
@@ -172,6 +239,17 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
           val audioManager = context?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
           audioManager?.unregisterAudioDeviceCallback(deviceCallback)
           routeSink = null
+        }
+      })
+    }
+    focusChannel = EventChannel(flutterPluginBinding.binaryMessenger, "flutter_midi_pro/focus_changes").also {
+      it.setStreamHandler(object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+          focusSink = events
+        }
+
+        override fun onCancel(arguments: Any?) {
+          focusSink = null
         }
       })
     }
@@ -391,6 +469,18 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
         }
         result.success(route)
       }
+      "acquireAudioFocus" -> {
+        result.success(acquireFocus())
+      }
+      "releaseAudioFocus" -> {
+        // deactivateSession / reactivate yalnız iOS'ta anlamlı.
+        releaseFocus()
+        result.success(null)
+      }
+      "getAudioSessionInfo" -> {
+        // Tanı: Android'de oturum kavramı yok; yalnız odak durumu.
+        result.success(mapOf("focusHeld" to focusHeld))
+      }
       "getAudioRouteDetail" -> {
         // Type + device name, so latency-sensitive callers can key state per
         // physical accessory rather than per route category (two different
@@ -523,6 +613,9 @@ class FlutterMidiProPlugin: FlutterPlugin, MethodCallHandler {
       ?.unregisterAudioDeviceCallback(deviceCallback)
     routeChannel?.setStreamHandler(null)
     routeSink = null
+    focusChannel?.setStreamHandler(null)
+    focusSink = null
+    releaseFocus()
     // Fully release the audio engine and all loaded soundfonts if the app is
     // torn down without calling dispose().
     idleShutdownJob?.cancel()

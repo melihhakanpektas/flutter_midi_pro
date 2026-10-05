@@ -151,6 +151,20 @@ abstract class FlutterMidiProPlatform extends PlatformInterface {
   Stream<Map<String, Object?>> get audioRouteChanges =>
       const Stream<Map<String, Object?>>.empty();
 
+  /// Oturum boyu ses odağını ister (bkz. `MidiPro.acquireAudioFocus`).
+  /// Varsayılan: odak kavramı olmayan platform → `true`.
+  Future<bool> acquireAudioFocus() async => true;
+
+  /// Odağı bırakır (bkz. `MidiPro.releaseAudioFocus`). Varsayılan: no-op.
+  Future<void> releaseAudioFocus({
+    bool deactivateSession = true,
+    bool reactivate = true,
+  }) async {}
+
+  /// Odak değişimleri (`AudioFocusChange.name` dizgileri). Varsayılan: olay
+  /// yok.
+  Stream<String> get audioFocusChanges => const Stream<String>.empty();
+
   Future<void> setReverb(bool enabled, double roomSize, double damping, double width, double level) {
     throw UnimplementedError('setReverb() has not been implemented.');
   }

@@ -229,3 +229,28 @@
   `oldDeviceUnavailable` (category changes and speaker overrides are not
   device changes). Repeated identical details are suppressed. macOS: no
   events.
+
+## 4.0.15
+
+- Session-scoped audio focus: `acquireAudioFocus()`, `releaseAudioFocus()` and
+  the `audioFocusChanges` stream (`AudioFocusChange`).
+  - **Android:** `AUDIOFOCUS_GAIN_TRANSIENT` (`USAGE_MEDIA`,
+    `CONTENT_TYPE_MUSIC`): other apps' music pauses for the session and
+    resumes when focus is released. After a permanent loss the plugin does not
+    request focus again on its own — that is the caller's decision (Android
+    expects an explicit user action). API 24-25 use the legacy request.
+  - **iOS:** the session switches to non-mixing `playback` (left alone if it
+    already is non-mixing, e.g. a recorder's `playAndRecord` — every category
+    change is a route change) and the engine is started if stopped. Releasing
+    runs a fixed order: mixing category → engine stop → deactivate with
+    `notifyOthersOnDeactivation` (other music resumes) → reactivate as mixing
+    → engine start. No reconnect, no rebuild. `reactivate: false` leaves the
+    session inactive and the engine stopped (for releasing while the app goes
+    to the background); `deactivateSession: false` only changes the category.
+    Interruption begin/end are also forwarded to `audioFocusChanges`; the
+    existing rebuild-after-interruption path is unchanged.
+  - **macOS:** no-op (`acquireAudioFocus()` returns `true`).
+- `getAudioSessionInfo()` reports `focusHeld` (iOS), and on Android now
+  returns `{focusHeld}` instead of being unimplemented.
+- Fixed a stale comment that claimed the interruption rebuild is deferred
+  while a recorder holds the session (it is not, by design).
