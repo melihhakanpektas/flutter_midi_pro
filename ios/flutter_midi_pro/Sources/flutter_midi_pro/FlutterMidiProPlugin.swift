@@ -644,6 +644,9 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
             "outputs": session.currentRoute.outputs.map { $0.portType.rawValue },
             "inputs": session.currentRoute.inputs.map { $0.portType.rawValue },
             "focusHeld": focusHeld,
+            // Stopped engine = the next playNote starts the IO unit itself
+            // (see the self-heal in playNote).
+            "engineRunning": audioEngine?.isRunning ?? false,
         ])
     case "getAudioRoute":
         // Route category for latency-sensitive callers (calibrations are tied
@@ -823,7 +826,12 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
         let velocity = args["velocity"] as! Int
         let sfId = args["sfId"] as! Int
         // Self-heal if a missed notification left the engine stopped (PR #55).
+        // Logged: the IO unit starting *at* the note-on puts the system's
+        // start-up ramp on the note's attack (quiet onset that swells — can be
+        // heard as a double onset). Without this line the event log showed a
+        // plain noteOn and the restart stayed invisible.
         if let engine = audioEngine, !engine.isRunning {
+            logEvent("engine stopped at noteOn -> self-heal start")
             try? AVAudioSession.sharedInstance().setActive(true)
             try? engine.start()
         }

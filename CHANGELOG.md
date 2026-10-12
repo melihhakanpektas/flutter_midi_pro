@@ -254,3 +254,13 @@
   returns `{focusHeld}` instead of being unimplemented.
 - Fixed a stale comment that claimed the interruption rebuild is deferred
   while a recorder holds the session (it is not, by design).
+
+## 4.0.16
+
+- **iOS:** the self-heal in `playNote` (engine found stopped → session
+  activated and engine started right before the note-on) now writes
+  `engine stopped at noteOn -> self-heal start` to the event log, and
+  `getAudioSessionInfo()` reports `engineRunning`. Starting the IO unit at the
+  note-on puts the system's start-up ramp on the note's attack (quiet onset
+  that swells — reported as a "double play"); until now that path left no
+  trace, so `getAudioEvents()` showed a plain noteOn.

@@ -761,6 +761,11 @@ class MidiPro {
   ///   `playAndRecord` session onto the 8/16 kHz HFP profile unless the
   ///   category options restrict Bluetooth to A2DP.
   /// - `ioBufferDuration`, `outputChannels`.
+  /// - `engineRunning` — `false` means the next [playNote] will start the
+  ///   engine itself, so the system's IO start-up ramp lands on that note's
+  ///   attack (a quiet onset that swells; can be heard as a double onset).
+  ///   The same moment is logged in [getAudioEvents] as
+  ///   `engine stopped at noteOn -> self-heal start`.
   ///
   /// Intended for bug reports: it turns "the sound suddenly got worse" into
   /// numbers.
