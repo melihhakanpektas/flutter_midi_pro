@@ -26,8 +26,14 @@ apply plugin: "com.android.library"
 // Flutter 3.44+ (AGP 9+) ships built-in Kotlin support and deprecates plugins
 // applying the Kotlin Gradle Plugin themselves; apply it only on older AGP.
 // https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+// Flutter apps may opt out of built-in Kotlin (android.builtInKotlin=false, the
+// Flutter 3.47 template default); then the standalone plugin is still needed.
 def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
-if (agpMajor < 9) {
+def builtInKotlin = providers.gradleProperty("android.builtInKotlin")
+        .map { it.toBoolean() }
+        .orElse(agpMajor >= 9)
+        .get()
+if (agpMajor < 9 || !builtInKotlin) {
     apply plugin: "kotlin-android"
 }
 
