@@ -264,3 +264,9 @@
   note-on puts the system's start-up ramp on the note's attack (quiet onset
   that swells — reported as a "double play"); until now that path left no
   trace, so `getAudioEvents()` showed a plain noteOn.
+
+## 4.0.17
+
+- **Android:** the `kotlin-android` plugin is applied again when an app on AGP 9+
+  sets `android.builtInKotlin=false`. The build previously failed because
+  `kotlin()` could not be resolved.
