@@ -270,3 +270,16 @@
 - **Android:** the `kotlin-android` plugin is applied again when an app on AGP 9+
   sets `android.builtInKotlin=false`. The build previously failed because
   `kotlin()` could not be resolved.
+
+## 4.0.18
+
+- **iOS:** `init` no longer fails when the audio engine cannot start at that
+  moment (`AVAudioSessionErrorCodeCannotStartPlaying`, `'!pla'` / 561015905 —
+  e.g. a background launch or prewarming, or another app holding non-mixable
+  audio). The engine and soundfont state are set up anyway; the start is
+  retried after activating the session, again in `configureAudioSession`, on
+  `UIApplication.didBecomeActiveNotification`, and by the existing noteOn
+  self-heal. Previously the `INIT_FAILED` exception closed apps that awaited
+  `init()` at launch. `configureAudioSession` now treats a failed
+  `setActive(true)` as deferred instead of an error (a failed `setCategory`
+  still returns `SESSION_CONFIG_FAILED`).

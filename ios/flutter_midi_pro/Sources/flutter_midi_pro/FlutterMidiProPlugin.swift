@@ -1,4 +1,5 @@
 import Flutter
+import UIKit
 import CoreMIDI
 import AVFAudio
 import AVFoundation
@@ -262,6 +263,12 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
       name: AVAudioSession.mediaServicesWereResetNotification,
       object: session
     )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleDidBecomeActive),
+      name: UIApplication.didBecomeActiveNotification,
+      object: nil
+    )
   }
 
   @objc private func handleAudioSessionInterruption(notification: Notification) {
@@ -425,7 +432,6 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     engine.connect(delay, to: distortion, format: nil)
     engine.connect(distortion, to: reverb, format: nil)
     engine.connect(reverb, to: engine.mainMixerNode, format: nil)
-    try engine.start()
 
     NotificationCenter.default.addObserver(
       self,
@@ -441,6 +447,41 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     delayNode = delay
     distortionNode = distortion
     reverbNode = reverb
+    startEngineOrDefer(engine, context: "setup")
+  }
+
+  /// Starts the engine; a failure is **not** fatal.
+  ///
+  /// `engine.start()` can fail with `AVAudioSessionErrorCodeCannotStartPlaying`
+  /// ('!pla', 561015905) when the session may not play right now: the app is
+  /// being launched in the background (iOS prewarming, a notification), or
+  /// another app holds non-mixable audio. Seen in the field (muzik_prova
+  /// 1.0.0/1.0.1, iOS 27): `init` returned INIT_FAILED and the app never
+  /// opened. The graph is complete at this point, so soundfonts can still be
+  /// loaded; the engine is started later by `didBecomeActive`, by
+  /// `acquireAudioFocus` or by the note-on self-heal.
+  private func startEngineOrDefer(_ engine: AVAudioEngine, context: String) {
+    do {
+      try engine.start()
+      return
+    } catch {
+      logEvent("\(context): engine start failed: \(error) -> activate + retry")
+    }
+    try? AVAudioSession.sharedInstance().setActive(true)
+    do {
+      try engine.start()
+    } catch {
+      logEvent("\(context): engine start deferred: \(error)")
+      print("flutter_midi_pro: audio engine start deferred (\(context)): \(error)")
+    }
+  }
+
+  /// The app came to the foreground: a start that failed at launch (or after
+  /// an interruption) can succeed now.
+  @objc private func handleDidBecomeActive(notification: Notification) {
+    guard isInitialized, let engine = audioEngine, !engine.isRunning else { return }
+    logEvent("became active with engine stopped -> start")
+    startEngineOrDefer(engine, context: "didBecomeActive")
   }
 
   private func resetState() {
@@ -602,14 +643,26 @@ public class FlutterMidiProPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
             if mixWithOthers { options.insert(.mixWithOthers) }
             if duckOthers { options.insert(.duckOthers) }
         }
+        let session = AVAudioSession.sharedInstance()
         do {
-            let session = AVAudioSession.sharedInstance()
             try session.setCategory(category, options: options)
-            try session.setActive(true)
-            result(nil)
         } catch {
             result(FlutterError(code: "SESSION_CONFIG_FAILED", message: "Failed to configure the audio session: \(error)", details: nil))
+            return
         }
+        // Activation can be refused while the app is not allowed to play
+        // (background launch, another app's non-mixable audio). The category
+        // is stored either way; activation is retried on didBecomeActive,
+        // acquireAudioFocus and note-on, so it must not fail the call.
+        do {
+            try session.setActive(true)
+        } catch {
+            logEvent("configureAudioSession: activation deferred: \(error)")
+        }
+        if let engine = audioEngine, !engine.isRunning {
+            startEngineOrDefer(engine, context: "configureAudioSession")
+        }
+        result(nil)
     case "acquireAudioFocus":
         result(acquireFocus())
     case "releaseAudioFocus":
